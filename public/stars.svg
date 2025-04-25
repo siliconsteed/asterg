@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g opacity="0.5">
+    <path d="M40 0L44.4773 35.5227L80 40L44.4773 44.4773L40 80L35.5227 44.4773L0 40L35.5227 35.5227L40 0Z" fill="#FFB800"/>
+  </g>
+  <g opacity="0.3">
+    <path d="M60 20L62.2386 37.7614L80 40L62.2386 42.2386L60 60L57.7614 42.2386L40 40L57.7614 37.7614L60 20Z" fill="#FFB800"/>
+  </g>
+  <g opacity="0.2">
+    <path d="M20 20L22.2386 37.7614L40 40L22.2386 42.2386L20 60L17.7614 42.2386L0 40L17.7614 37.7614L20 20Z" fill="#FFB800"/>
+  </g>
+</svg>
