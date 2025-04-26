@@ -4,16 +4,34 @@ import { useState } from 'react';
 import ChatHistory from '@/components/ChatHistory';
 import Chat from '@/components/Chat';
 
+import { useEffect } from 'react';
+
 export default function HistoryPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-  
+const [user, setUser] = useState<any>(null);
 
+useEffect(() => {
+  const stored = localStorage.getItem('user');
+  if (stored) setUser(JSON.parse(stored));
+}, []);
+
+if (!user) {
   return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <h2 className="text-xl font-semibold mb-2">Please log in to view your chat history.</h2>
+        <a href="/login" className="text-indigo-600 underline">Go to Login</a>
+      </div>
+    </div>
+  );
+}
+
+return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-white to-white">
       <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-indigo-800">Chat History</h1>
-          <p className="mt-2 text-sm text-gray-600">View and continue your past conversations with AstroGPT</p>
+          <p className="mt-2 text-sm text-gray-600">View and continue your past conversations with AIstroGPT</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -40,10 +58,8 @@ export default function HistoryPage() {
             {selectedSessionId ? (
               <div className="bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-2xl shadow-sm">
                 <Chat
-                  userId={user._id}
-                  sessionId={selectedSessionId}
+                  userDetails={user}
                   onEndChat={() => setSelectedSessionId(null)}
-                  isPaidSession={false}
                 />
               </div>
             ) : (

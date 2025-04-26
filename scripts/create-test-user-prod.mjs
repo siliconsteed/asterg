@@ -45,7 +45,7 @@ const User = mongoose.models.User || mongoose.model('User', userSchema);
 async function createTestUser() {
   try {
     // Connect to MongoDB
-    await mongoose.connect('mongodb://127.0.0.1:27017/astro-gpt');
+    await mongoose.connect('mongodb://127.0.0.1:27017/aistro-gpt');
     console.log('Connected to MongoDB');
 
     // Delete existing test user if exists
