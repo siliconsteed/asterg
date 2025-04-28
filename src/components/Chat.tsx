@@ -40,6 +40,7 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [chatStarted, setChatStarted] = useState(false);
+  const [astrologyApiMessage, setAstrologyApiMessage] = useState<ChatMessage | null>(null);
   const router = useRouter();
 
   const [isTyping, setIsTyping] = useState(false);
@@ -55,8 +56,6 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
     scrollToBottom();
   }, [messages]);
 
-
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || disabled) return;
@@ -71,93 +70,155 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
       sender: 'user',
       timestamp: new Date(),
     };
-
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    setIsTyping(true);
 
-    if (!userDetails) {
-      return;
-    }
-    const { dob, tob, pob, lat, lon } = userDetails;
-
-    // Check for missing fields
-    if (!dob || !tob || !pob || !lat || !lon) {
-      setMessages((prev) => [...prev, {
-        id: (Date.now() + 2).toString(),
-        content: 'Please fill in all required details (Date, Time, Place, Latitude, Longitude) before starting the chat.',
-        sender: 'system',
-        timestamp: new Date(),
-      }]);
+    // First message: fetch astrology API, store result, send to OpenAI
+    if (!astrologyApiMessage) {
+      if (!userDetails) {
+        setIsTyping(false);
+        return;
+      }
+      const { dob, tob, pob, lat, lon } = userDetails;
+      if (!dob || !tob || !pob || !lat || !lon) {
+        setMessages((prev) => [...prev, {
+          id: (Date.now() + 2).toString(),
+          content: 'Please fill in all required details (Date, Time, Place, Latitude, Longitude) before starting the chat.',
+          sender: 'system',
+          timestamp: new Date(),
+        }]);
+        setIsTyping(false);
+        return;
+      }
+      try {
+        const payload = {
+          dob: dob.replace(/\//g, '-'),
+          tob,
+          pob,
+          lat,
+          lon,
+        };
+        const res = await fetch('/api/kundli', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        let reply = '';
+        if (data.output) {
+          reply = 'Kundli generated! Here are some planetary positions:';
+          const planets = data.output[1];
+          reply += '\n';
+          for (const planet in planets) {
+            const p = planets[planet];
+            reply += `\n${planet}: ${p.fullDegree?.toFixed(2)}°, Sign ${p.current_sign}`;
+          }
+        } else if (data.planet_positions) {
+          reply = 'Kundli generated! Planetary positions:';
+          for (const [planet, pos] of Object.entries(data.planet_positions)) {
+            reply += `\n${planet}: ${pos}°`;
+          }
+        } else if (data.error) {
+          reply = 'Error: ' + data.error;
+        } else {
+          reply = 'Received response: ' + JSON.stringify(data);
+        }
+        const astroMsg: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          content: reply,
+          sender: 'system',
+          timestamp: new Date(),
+        };
+        setAstrologyApiMessage(astroMsg);
+        setMessages((prev) => [...prev, astroMsg]);
+        // Now send astrology result + user message to OpenAI
+        try {
+          const openaiRes = await fetch('/api/openai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [
+                { role: 'system', content: reply },
+                { role: 'user', content: input },
+              ],
+            }),
+          });
+          const openaiData = await openaiRes.json();
+          let openaiResult = '';
+          if (openaiData.result) {
+            openaiResult = openaiData.result;
+          } else if (openaiData.error) {
+            openaiResult = 'OpenAI error: ' + openaiData.error;
+          } else {
+            openaiResult = 'Unexpected OpenAI response.';
+          }
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: (Date.now() + 3).toString(),
+              content: openaiResult,
+              sender: 'system',
+              timestamp: new Date(),
+            },
+          ]);
+        } catch (err) {
+          setMessages((prev) => [...prev, {
+            id: (Date.now() + 4).toString(),
+            content: 'Sorry, there was a problem processing the response with OpenAI.',
+            sender: 'system',
+            timestamp: new Date(),
+          }]);
+        }
+      } catch (err) {
+        setMessages((prev) => [...prev, {
+          id: (Date.now() + 2).toString(),
+          content: 'Sorry, there was a problem generating your kundli. Please try again.',
+          sender: 'system',
+          timestamp: new Date(),
+        }]);
+      }
       setIsTyping(false);
       return;
     }
-
-    setIsTyping(true);
+    // Subsequent messages: send full conversation to OpenAI (astrologyApiMessage + all user/system messages)
     try {
-      const payload = {
-        dob: dob.replace(/\//g, '-'),
-        tob,
-        pob,
-        lat,
-        lon,
-      };
-      const res = await fetch('/api/kundli', {
+      // Prepare messages for OpenAI
+      const thread = [
+        { role: 'system', content: astrologyApiMessage.content },
+        ...messages.map((msg) => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.content,
+        })),
+        { role: 'user', content: input },
+      ];
+      const openaiRes = await fetch('/api/openai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ messages: thread }),
       });
-      const data = await res.json();
-      let reply = '';
-      if (data.output) {
-        // FreeAstrologyAPI returns planetary positions as data.output
-        reply = '[Test API] Kundli generated! Here are some planetary positions:';
-        const planets = data.output[1];
-        reply += '\n';
-        for (const planet in planets) {
-          const p = planets[planet];
-          reply += `\n${planet}: ${p.fullDegree?.toFixed(2)}°, Sign ${p.current_sign}`;
-        }
-      } else if (data.planet_positions) {
-        reply = '[Test API] Kundli generated! Planetary positions:';
-        for (const [planet, pos] of Object.entries(data.planet_positions)) {
-          reply += `\n${planet}: ${pos}°`;
-        }
-      } else if (data.error) {
-        reply = '[Test API] Error: ' + data.error;
-      } else {
-        reply = '[Test API] Received response: ' + JSON.stringify(data);
-      }
+      const openaiData = await openaiRes.json();
       let openaiResult = '';
-try {
-  const openaiRes = await fetch('/api/openai', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: reply }),
-  });
-  const openaiData = await openaiRes.json();
-  if (openaiData.result) {
-    openaiResult = openaiData.result;
-  } else if (openaiData.error) {
-    openaiResult = '[Test API] OpenAI error: ' + openaiData.error;
-  } else {
-    openaiResult = '[Test API] Unexpected OpenAI response.';
-  }
-} catch (err) {
-  openaiResult = '[Test API] Sorry, there was a problem processing the response with OpenAI.';
-}
-setMessages((prev) => [
-  ...prev,
-  {
-    id: (Date.now() + 3).toString(),
-    content: openaiResult,
-    sender: 'system',
-    timestamp: new Date(),
-  },
-]);
+      if (openaiData.result) {
+        openaiResult = openaiData.result;
+      } else if (openaiData.error) {
+        openaiResult = 'OpenAI error: ' + openaiData.error;
+      } else {
+        openaiResult = 'Unexpected OpenAI response.';
+      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 3).toString(),
+          content: openaiResult,
+          sender: 'system',
+          timestamp: new Date(),
+        },
+      ]);
     } catch (err) {
       setMessages((prev) => [...prev, {
-        id: (Date.now() + 2).toString(),
-        content: 'Sorry, there was a problem generating your kundli. Please try again.',
+        id: (Date.now() + 4).toString(),
+        content: 'Sorry, there was a problem processing the response with OpenAI.',
         sender: 'system',
         timestamp: new Date(),
       }]);
@@ -170,9 +231,8 @@ setMessages((prev) => [
   return (
     <div className="flex flex-col h-[80vh] max-w-3xl mx-auto p-6 bg-gradient-to-b from-indigo-50 via-white to-white rounded-2xl shadow-xl border border-indigo-100">
       <div className="flex items-center mb-6 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
-  <span className="text-xl font-bold text-indigo-800">AIstroGPT chat</span>
-</div>
-
+        <span className="text-xl font-bold text-indigo-800">AIstroGPT chat</span>
+      </div>
       <div className="flex-1 overflow-y-auto mb-6 space-y-6 rounded-xl p-4 bg-white/80 backdrop-blur-sm border border-indigo-100">
         {messages.map((message) => (
           <div
@@ -253,7 +313,7 @@ setMessages((prev) => [
                 let reply = '';
                 let rawApiResponse = '';
                 if (data.output) {
-                  reply = '[Test API] Kundli generated! Here are some planetary positions:';
+                  reply = 'Kundli generated! Here are some planetary positions:';
                   const planets = data.output[1];
                   reply += '\n';
                   for (const planet in planets) {
@@ -262,16 +322,16 @@ setMessages((prev) => [
                   }
                   rawApiResponse = JSON.stringify(data, null, 2);
                 } else if (data.planet_positions) {
-                  reply = '[Test API] Kundli generated! Planetary positions:';
+                  reply = 'Kundli generated! Planetary positions:';
                   for (const [planet, pos] of Object.entries(data.planet_positions)) {
                     reply += `\n${planet}: ${pos}°`;
                   }
                   rawApiResponse = JSON.stringify(data, null, 2);
                 } else if (data.error) {
-                  reply = '[Test API] Error: ' + data.error;
+                  reply = 'Error: ' + data.error;
                   rawApiResponse = JSON.stringify(data, null, 2);
                 } else {
-                  reply = '[Test API] Received response: ' + JSON.stringify(data);
+                  reply = 'Received response: ' + JSON.stringify(data);
                   rawApiResponse = JSON.stringify(data, null, 2);
                 }
 
@@ -286,12 +346,12 @@ setMessages((prev) => [
                   if (openaiData.result) {
                     openaiResult = openaiData.result;
                   } else if (openaiData.error) {
-                    openaiResult = '[Test API] OpenAI error: ' + openaiData.error;
+                    openaiResult = 'OpenAI error: ' + openaiData.error;
                   } else {
-                    openaiResult = '[Test API] Unexpected OpenAI response.';
+                    openaiResult = 'Unexpected OpenAI response.';
                   }
                 } catch (err) {
-                  openaiResult = '[Test API] Sorry, there was a problem processing the response with OpenAI.';
+                  openaiResult = 'Sorry, there was a problem processing the response with OpenAI.';
                 }
                 setMessages((prev) => [
                   ...prev,
