@@ -24,7 +24,7 @@ export default function ChatPage() {
     <main className="min-h-screen py-12 bg-gradient-to-br from-primary/5 to-secondary/5">
       <div className="container mx-auto px-4">
         <h1 className="text-4xl font-bold text-center text-primary mb-8">
-          Astro GPT Chat
+          AIstroGPT chat
         </h1>
         <div className="flex flex-row gap-8 justify-center items-start">
           <UserDetailsForm onSetData={handleSetData} disabled={detailsSet} />

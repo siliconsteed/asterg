@@ -2,8 +2,8 @@ import './globals.css'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Astro GPT',
-  description: 'Your personal astrological assistant',
+  title: 'AIstroGPT',
+  description: 'Your personal astrological assistant with AI capabilities',
 }
 
 export default function RootLayout({

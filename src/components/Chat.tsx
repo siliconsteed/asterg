@@ -34,17 +34,10 @@ interface ChatProps {
 }
 
 // Set to 1 to show the Test Astro API button
-const apiTest = 1;
+const apiTest = 1; // Only used for the lower button beside End Chat
 
 export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'init',
-      content: '', // We'll render a structured message below
-      sender: 'system',
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [chatStarted, setChatStarted] = useState(false);
   const router = useRouter();
@@ -117,7 +110,7 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
       let reply = '';
       if (data.output) {
         // FreeAstrologyAPI returns planetary positions as data.output
-        reply = 'Kundli generated! Here are some planetary positions:';
+        reply = '[Test API] Kundli generated! Here are some planetary positions:';
         const planets = data.output[1];
         reply += '\n';
         for (const planet in planets) {
@@ -125,14 +118,14 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
           reply += `\n${planet}: ${p.fullDegree?.toFixed(2)}°, Sign ${p.current_sign}`;
         }
       } else if (data.planet_positions) {
-        reply = 'Kundli generated! Planetary positions:';
+        reply = '[Test API] Kundli generated! Planetary positions:';
         for (const [planet, pos] of Object.entries(data.planet_positions)) {
           reply += `\n${planet}: ${pos}°`;
         }
       } else if (data.error) {
-        reply = 'Error: ' + data.error;
+        reply = '[Test API] Error: ' + data.error;
       } else {
-        reply = 'Received response: ' + JSON.stringify(data);
+        reply = '[Test API] Received response: ' + JSON.stringify(data);
       }
       let openaiResult = '';
 try {
@@ -145,12 +138,12 @@ try {
   if (openaiData.result) {
     openaiResult = openaiData.result;
   } else if (openaiData.error) {
-    openaiResult = 'OpenAI error: ' + openaiData.error;
+    openaiResult = '[Test API] OpenAI error: ' + openaiData.error;
   } else {
-    openaiResult = 'Unexpected OpenAI response.';
+    openaiResult = '[Test API] Unexpected OpenAI response.';
   }
 } catch (err) {
-  openaiResult = 'Sorry, there was a problem processing the response with OpenAI.';
+  openaiResult = '[Test API] Sorry, there was a problem processing the response with OpenAI.';
 }
 setMessages((prev) => [
   ...prev,
@@ -176,20 +169,9 @@ setMessages((prev) => [
 
   return (
     <div className="flex flex-col h-[80vh] max-w-3xl mx-auto p-6 bg-gradient-to-b from-indigo-50 via-white to-white rounded-2xl shadow-xl border border-indigo-100">
-      <div className="flex justify-between items-center mb-6 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
-        <span className="text-xl font-bold text-indigo-800">AstroGPT Chat</span>
-        <button
-          onClick={() => {
-            if (window.confirm('Are you sure you want to end this chat session?')) {
-              onEndChat();
-            }
-          }}
-          className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full transition-all duration-200 border border-red-200"
-        >
-          <XMarkIcon className="w-5 h-5 mr-1" />
-          End Chat
-        </button>
-      </div>
+      <div className="flex items-center mb-6 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
+  <span className="text-xl font-bold text-indigo-800">AIstroGPT chat</span>
+</div>
 
       <div className="flex-1 overflow-y-auto mb-6 space-y-6 rounded-xl p-4 bg-white/80 backdrop-blur-sm border border-indigo-100">
         {messages.map((message) => (
@@ -198,12 +180,18 @@ setMessages((prev) => [
             className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[70%] rounded-2xl p-4 shadow-sm ${message.sender === 'user'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white border border-indigo-100 text-gray-900'
-              }`}
+              className={`max-w-[75%] relative p-5 mb-2 rounded-3xl shadow-lg transition-all duration-200
+                ${message.sender === 'user'
+                  ? 'bg-gradient-to-br from-indigo-500 via-indigo-400 to-indigo-600 text-white border border-indigo-300'
+                  : 'bg-gradient-to-br from-white via-indigo-50 to-indigo-100 text-gray-900 border border-indigo-100'}
+              `}
             >
-              <p className="text-[15px] leading-relaxed">{message.content}</p>
+              <span className="absolute top-3 left-[-12px] w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-indigo-100 hidden md:block" style={{ display: message.sender === 'user' ? 'none' : 'block' }} />
+<span className="absolute top-3 right-[-12px] w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-l-8 border-l-indigo-500 hidden md:block" style={{ display: message.sender === 'user' ? 'block' : 'none' }} />
+<p className="text-[16px] leading-relaxed whitespace-pre-line">{message.content}</p>
+<p className={`text-xs font-semibold ${message.sender === 'user' ? 'text-indigo-700' : 'text-indigo-400'} mt-1`}>
+  {message.sender === 'user' ? 'You' : message.sender === 'system' ? 'AIstroGPT' : message.sender}
+</p>
               <p className={`text-xs mt-2 ${message.sender === 'user' ? 'text-indigo-200' : 'text-gray-400'}`}>
                 {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
@@ -213,26 +201,28 @@ setMessages((prev) => [
         <div ref={messagesEndRef} />
       </div>
 
+
+
       <form onSubmit={handleSubmit} className="flex gap-3 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={isTyping ? 'AstroGPT is thinking...' : 'Type your message...'}
+          placeholder={isTyping ? 'AIstroGPT is thinking...' : 'Type your message...'}
           className="flex-1 p-4 bg-white border border-indigo-200 rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
           disabled={isTyping}
         />
 
       </form>
       {apiTest === 1 && (
-        <div className="flex justify-center mt-4">
+        <div className="flex justify-center gap-3 mt-4">
           <button
             className="px-5 py-2 bg-indigo-500 text-white rounded-xl shadow hover:bg-indigo-600 transition-all duration-200 font-medium"
             onClick={async () => {
               setIsTyping(true);
               setMessages((prev) => [...prev, {
                 id: Date.now().toString(),
-                content: '[Test] Sending test data to Astro API...',
+                content: 'Sending data to Astro API...',
                 sender: 'user',
                 timestamp: new Date(),
               }]);
@@ -328,11 +318,21 @@ setMessages((prev) => [
             }}
             disabled={isTyping}
           >
-            Test Astro API
+            Send
+          </button>
+          <button
+            onClick={() => {
+              if (window.confirm('Are you sure you want to end this chat session?')) {
+                onEndChat();
+              }
+            }}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg shadow hover:bg-red-700 transition-all duration-200 font-medium text-sm flex items-center"
+          >
+            <XMarkIcon className="w-4 h-4 mr-1" />
+            End Chat
           </button>
         </div>
       )}
     </div>
   );
 }
-
