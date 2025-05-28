@@ -25,6 +25,7 @@ interface UserDetails {
   pob: string;
   lat: number;
   lon: number;
+  timezone: number;
 }
 
 interface ChatProps {
@@ -37,10 +38,26 @@ interface ChatProps {
 const apiTest = 1; // Only used for the lower button beside End Chat
 
 export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
+  // ...state hooks...
+
+  // Reset chat (clears localStorage and state)
+  const resetChat = () => {
+    localStorage.removeItem('astroData');
+    localStorage.removeItem('threadId');
+    setAstroData(null);
+    setThreadId(null);
+    setAstrologyApiMessage(null);
+    setMessages([]);
+    setInput('');
+    setChatStarted(false);
+  };
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [chatStarted, setChatStarted] = useState(false);
   const [astrologyApiMessage, setAstrologyApiMessage] = useState<ChatMessage | null>(null);
+  const [astroData, setAstroData] = useState<any | null>(null); // Persisted astrology data
+  const [threadId, setThreadId] = useState<string | null>(null); // New state for Thread ID
   const router = useRouter();
 
   const [isTyping, setIsTyping] = useState(false);
@@ -56,6 +73,14 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
     scrollToBottom();
   }, [messages]);
 
+  // Restore astroData and threadId from localStorage on mount
+  useEffect(() => {
+    const storedAstro = localStorage.getItem('astroData');
+    const storedThreadId = localStorage.getItem('threadId');
+    if (storedAstro) setAstroData(JSON.parse(storedAstro));
+    if (storedThreadId) setThreadId(storedThreadId);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || disabled) return;
@@ -66,17 +91,67 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
-      content: input,
+      content: input, // content will be taken from currentInput later
       sender: 'user',
       timestamp: new Date(),
     };
-    setMessages((prev) => [...prev, userMessage]);
+    // Store current input *before* clearing and adding user message to UI
+    const currentInput = input; 
+    setMessages((prev) => [...prev, { ...userMessage, content: currentInput }]); // Use currentInput for UI
     setInput('');
     setIsTyping(true);
 
-    // First message: fetch astrology API, store result, send to OpenAI
-    if (!astrologyApiMessage) {
+    // If we already have astrology data and threadId, skip astrology API and go straight to OpenAI
+    if (astroData && threadId) {
+      try {
+        const assistantRes = await fetch('/api/assistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userQuery: currentInput,
+            threadId: threadId, // Send existing thread ID
+          }),
+        });
+        const assistantData = await assistantRes.json();
+        let assistantResult = '';
+        if (assistantRes.ok && assistantData.result) {
+          assistantResult = assistantData.result;
+        } else if (assistantData.error) {
+          assistantResult = 'AI Assistant Error: ' + assistantData.error;
+        } else {
+          assistantResult = 'Unexpected response from AI Assistant.';
+        }
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + .1).toString(), // Unique ID
+            content: assistantResult,
+            sender: 'assistant',
+            timestamp: new Date(),
+          },
+        ]);
+      } catch (err) {
+        console.error('Error calling /api/assistant (subsequent message):', err);
+        setMessages((prev) => [...prev, {
+          id: (Date.now() + .2).toString(),
+          content: 'Sorry, there was a problem communicating with the AI Assistant. ' + (err instanceof Error ? err.message : ''),
+          sender: 'system',
+          timestamp: new Date(),
+        }]);
+      }
+      setIsTyping(false);
+      return;
+    }
+
+    // First message: fetch astrology API, store result, send to OpenAI, get thread_id
+    if (!astroData) {
       if (!userDetails) {
+        setMessages((prev) => [...prev, {
+          id: (Date.now() + 1).toString(),
+          content: 'User details are not available. Cannot fetch astrology data.',
+          sender: 'system',
+          timestamp: new Date(),
+        }]);
         setIsTyping(false);
         return;
       }
@@ -92,88 +167,86 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
         return;
       }
       try {
+        const [yearStr, monthStr, dateStr] = dob.replace(/-/g, '/').split('/');
+        const [hoursStr, minutesStr] = tob.split(':');
+
         const payload = {
-          dob: dob.replace(/\//g, '-'),
-          tob,
-          pob,
-          lat,
-          lon,
+          year: parseInt(yearStr, 10),
+          month: parseInt(monthStr, 10),
+          date: parseInt(dateStr, 10),
+          hours: parseInt(hoursStr, 10),
+          minutes: parseInt(minutesStr, 10),
+          latitude: lat,
+          longitude: lon,
+          timezone: userDetails.timezone,
         };
-        const res = await fetch('/api/kundli', {
+
+        // Show a message that astrology data is being fetched
+        setMessages((prev) => [...prev, {
+          id: (Date.now() + .1).toString(), // Unique ID
+          content: 'Fetching astrological insights...',
+          sender: 'system',
+          timestamp: new Date(),
+        }]);
+
+        const astroRes = await fetch('/api/astrology', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-        const data = await res.json();
-        let reply = '';
-        if (data.output) {
-          reply = 'Kundli generated! Here are some planetary positions:';
-          const planets = data.output[1];
-          reply += '\n';
-          for (const planet in planets) {
-            const p = planets[planet];
-            reply += `\n${planet}: ${p.fullDegree?.toFixed(2)}°, Sign ${p.current_sign}`;
-          }
-        } else if (data.planet_positions) {
-          reply = 'Kundli generated! Planetary positions:';
-          for (const [planet, pos] of Object.entries(data.planet_positions)) {
-            reply += `\n${planet}: ${pos}°`;
-          }
-        } else if (data.error) {
-          reply = 'Error: ' + data.error;
-        } else {
-          reply = 'Received response: ' + JSON.stringify(data);
-        }
-        const astroMsg: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          content: reply,
-          sender: 'system',
-          timestamp: new Date(),
-        };
-        setAstrologyApiMessage(astroMsg);
-        setMessages((prev) => [...prev, astroMsg]);
-        // Now send astrology result + user message to OpenAI
-        try {
-          const openaiRes = await fetch('/api/openai', {
+
+        const astroDataResp = await astroRes.json();
+        
+        if (astroRes.ok) {
+          setAstroData(astroDataResp);
+          localStorage.setItem('astroData', JSON.stringify(astroDataResp));
+          const astroConfirmationMsg: ChatMessage = {
+            id: (Date.now() + .2).toString(),
+            content: 'Astrology data fetched. Initializing AI Assistant...',
+            sender: 'system',
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, astroConfirmationMsg]);
+          setAstrologyApiMessage(astroConfirmationMsg);
+
+          // Now send astrology result + user message to the Assistant API endpoint
+          const assistantRes = await fetch('/api/assistant', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              messages: [
-                { role: 'system', content: reply },
-                { role: 'user', content: input },
-              ],
+              astrologyData: astroDataResp,
+              userQuery: currentInput,
             }),
           });
-          const openaiData = await openaiRes.json();
-          let openaiResult = '';
-          if (openaiData.result) {
-            openaiResult = openaiData.result;
-          } else if (openaiData.error) {
-            openaiResult = 'OpenAI error: ' + openaiData.error;
+          const assistantData = await assistantRes.json();
+
+          if (assistantRes.ok && assistantData.result && assistantData.thread_id) {
+            setThreadId(assistantData.thread_id);
+            localStorage.setItem('threadId', assistantData.thread_id);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: (Date.now() + .3).toString(),
+                content: assistantData.result,
+                sender: 'assistant',
+                timestamp: new Date(),
+              },
+            ]);
           } else {
-            openaiResult = 'Unexpected OpenAI response.';
-          }
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: (Date.now() + 3).toString(),
-              content: openaiResult,
+            const errorMsg = assistantData.error || 'Unexpected response from AI Assistant.';
+            setMessages((prev) => [...prev, {
+              id: (Date.now() + .3).toString(),
+              content: `AI Assistant Error: ${errorMsg}`,
               sender: 'system',
               timestamp: new Date(),
-            },
-          ]);
-        } catch (err) {
-          setMessages((prev) => [...prev, {
-            id: (Date.now() + 4).toString(),
-            content: 'Sorry, there was a problem processing the response with OpenAI.',
-            sender: 'system',
-            timestamp: new Date(),
-          }]);
+            }]);
+          }
         }
       } catch (err) {
+        console.error('Error during first message processing:', err);
         setMessages((prev) => [...prev, {
-          id: (Date.now() + 2).toString(),
-          content: 'Sorry, there was a problem generating your kundli. Please try again.',
+          id: (Date.now() + .4).toString(),
+          content: 'Sorry, there was a problem processing your first message. ' + (err instanceof Error ? err.message : String(err)),
           sender: 'system',
           timestamp: new Date(),
         }]);
@@ -181,55 +254,14 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
       setIsTyping(false);
       return;
     }
-    // Subsequent messages: send full conversation to OpenAI (astrologyApiMessage + all user/system messages)
-    try {
-      // Prepare messages for OpenAI
-      const thread = [
-        { role: 'system', content: astrologyApiMessage.content },
-        ...messages.map((msg) => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.content,
-        })),
-        { role: 'user', content: input },
-      ];
-      const openaiRes = await fetch('/api/openai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: thread }),
-      });
-      const openaiData = await openaiRes.json();
-      let openaiResult = '';
-      if (openaiData.result) {
-        openaiResult = openaiData.result;
-      } else if (openaiData.error) {
-        openaiResult = 'OpenAI error: ' + openaiData.error;
-      } else {
-        openaiResult = 'Unexpected OpenAI response.';
-      }
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 3).toString(),
-          content: openaiResult,
-          sender: 'system',
-          timestamp: new Date(),
-        },
-      ]);
-    } catch (err) {
-      setMessages((prev) => [...prev, {
-        id: (Date.now() + 4).toString(),
-        content: 'Sorry, there was a problem processing the response with OpenAI.',
-        sender: 'system',
-        timestamp: new Date(),
-      }]);
-    }
     setIsTyping(false);
   };
+
 
   // (other hooks or declarations can be here)
 
   return (
-    <div className="flex flex-col h-[80vh] max-w-3xl mx-auto p-6 bg-gradient-to-b from-indigo-50 via-white to-white rounded-2xl shadow-xl border border-indigo-100">
+    <div className="flex flex-col h-[95vh] max-w-5xl w-full mx-auto p-8 bg-gradient-to-b from-indigo-50 via-white to-white rounded-2xl shadow-2xl border border-indigo-100">
       <div className="flex items-center mb-6 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
         <span className="text-xl font-bold text-indigo-800">AIstroGPT chat</span>
       </div>
@@ -247,11 +279,11 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
               `}
             >
               <span className="absolute top-3 left-[-12px] w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-indigo-100 hidden md:block" style={{ display: message.sender === 'user' ? 'none' : 'block' }} />
-<span className="absolute top-3 right-[-12px] w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-l-8 border-l-indigo-500 hidden md:block" style={{ display: message.sender === 'user' ? 'block' : 'none' }} />
-<p className="text-[16px] leading-relaxed whitespace-pre-line">{message.content}</p>
-<p className={`text-xs font-semibold ${message.sender === 'user' ? 'text-indigo-700' : 'text-indigo-400'} mt-1`}>
-  {message.sender === 'user' ? 'You' : message.sender === 'system' ? 'AIstroGPT' : message.sender}
-</p>
+              <span className="absolute top-3 right-[-12px] w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-l-8 border-l-indigo-500 hidden md:block" style={{ display: message.sender === 'user' ? 'block' : 'none' }} />
+              <p className="text-[16px] leading-relaxed whitespace-pre-line">{message.content}</p>
+              <p className={`text-xs font-semibold ${message.sender === 'user' ? 'text-indigo-700' : 'text-indigo-400'} mt-1`}>
+                {message.sender === 'user' ? 'You' : message.sender === 'system' ? 'AIstroGPT' : message.sender}
+              </p>
               <p className={`text-xs mt-2 ${message.sender === 'user' ? 'text-indigo-200' : 'text-gray-400'}`}>
                 {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
@@ -260,8 +292,6 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
         ))}
         <div ref={messagesEndRef} />
       </div>
-
-
 
       <form onSubmit={handleSubmit} className="flex gap-3 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
         <input
@@ -297,71 +327,124 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
                   }]);
                   return;
                 }
+                const [yearStr, monthStr, dateStr] = userDetails.dob.replace(/-/g, '/').split('/');
+                const [hoursStr, minutesStr] = userDetails.tob.split(':');
+
+                const year = parseInt(yearStr, 10);
+                const month = parseInt(monthStr, 10);
+                const date = parseInt(dateStr, 10);
+                const hours = parseInt(hoursStr, 10);
+                const minutes = parseInt(minutesStr, 10);
+
+                if (isNaN(year) || isNaN(month) || isNaN(date) || isNaN(hours) || isNaN(minutes) || 
+                    String(yearStr).length !== 4 || month < 1 || month > 12 || date < 1 || date > 31 || // Basic validation
+                    hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+                  setMessages((prev) => [...prev, {
+                    id: Date.now().toString(),
+                    content: `Error: Invalid Date of Birth or Time of Birth. Please ensure DOB is YYYY/MM/DD and TOB is HH:MM. Received DOB: '${userDetails.dob}', TOB: '${userDetails.tob}'`,
+                    sender: 'system',
+                    timestamp: new Date(),
+                  }]);
+                  setIsTyping(false);
+                  return;
+                }
+
                 const payload = {
-                  dob: userDetails.dob,
-                  tob: userDetails.tob,
-                  pob: userDetails.pob,
-                  lat: userDetails.lat,
-                  lon: userDetails.lon
+                  year,
+                  month,
+                  date,
+                  hours,
+                  minutes,
+                  latitude: userDetails.lat,
+                  longitude: userDetails.lon,
+                  timezone: userDetails.timezone,
                 };
-                const res = await fetch('/api/kundli', {
+
+                const res = await fetch('/api/astrology', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(payload),
                 });
+
                 const data = await res.json();
                 let reply = '';
-                let rawApiResponse = '';
-                if (data.output) {
-                  reply = 'Kundli generated! Here are some planetary positions:';
-                  const planets = data.output[1];
-                  reply += '\n';
-                  for (const planet in planets) {
-                    const p = planets[planet];
-                    reply += `\n${planet}: ${p.fullDegree?.toFixed(2)}°, Sign ${p.current_sign}`;
-                  }
-                  rawApiResponse = JSON.stringify(data, null, 2);
-                } else if (data.planet_positions) {
-                  reply = 'Kundli generated! Planetary positions:';
-                  for (const [planet, pos] of Object.entries(data.planet_positions)) {
-                    reply += `\n${planet}: ${pos}°`;
-                  }
+                let rawApiResponse = ''; // Keep this if you want to log raw response elsewhere
+
+                if (res.ok) {
+                  reply = 'Astrology API Response:\n' + JSON.stringify(data, null, 2);
                   rawApiResponse = JSON.stringify(data, null, 2);
                 } else if (data.error) {
-                  reply = 'Error: ' + data.error;
+                  reply = 'Astrology API Error: ' + (data.details || data.error);
                   rawApiResponse = JSON.stringify(data, null, 2);
                 } else {
-                  reply = 'Received response: ' + JSON.stringify(data);
+                  reply = 'Received an unexpected response from Astrology API: ' + JSON.stringify(data, null, 2);
                   rawApiResponse = JSON.stringify(data, null, 2);
                 }
 
-                let openaiResult = '';
-                try {
-                  const openaiRes = await fetch('/api/openai', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: reply }),
-                  });
-                  const openaiData = await openaiRes.json();
-                  if (openaiData.result) {
-                    openaiResult = openaiData.result;
-                  } else if (openaiData.error) {
-                    openaiResult = 'OpenAI error: ' + openaiData.error;
-                  } else {
-                    openaiResult = 'Unexpected OpenAI response.';
+                // If astrology API call was successful, 'reply' contains the astrology data string.
+                // 'data' here is the JSON object from /api/astrology.
+                if (res.ok) {
+                  try {
+                    setMessages((prevMessages) => [
+                      ...prevMessages,
+                      {
+                        id: (Date.now() + 2).toString(),
+                        content: 'Sending astrology data to AI Assistant ...',
+                        sender: 'system',
+                        timestamp: new Date(),
+                      },
+                    ]);
+                    // For the test button, let's assume there's no separate 'userQuery' like the main chat input.
+                    // We'll send a generic query or just the astrology data.
+                    // For consistency, let's define a userQuery for the test button scenario.
+                    const testButtonUserQuery = 'Provide insights based on the following astrology data.';
+
+                    const assistantRes = await fetch('/api/assistant', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        astrologyData: data, // 'data' is the JSON object from /api/astrology
+                        userQuery: testButtonUserQuery, 
+                      }),
+                    });
+                    const assistantData = await assistantRes.json();
+                    let assistantResult = '';
+                    if (assistantRes.ok && assistantData.result) {
+                      assistantResult = assistantData.result;
+                    } else if (assistantData.error) {
+                      assistantResult = 'AI Assistant Error (Test Button): ' + assistantData.error;
+                    } else {
+                      assistantResult = 'Unexpected response from AI Assistant (Test Button).';
+                    }
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        id: (Date.now() + 3).toString(),
+                        content: assistantResult,
+                        sender: 'system',
+                        timestamp: new Date(),
+                      },
+                    ]);
+                  } catch (err) {
+                    console.error('Error calling /api/assistant (Test Button):', err);
+                    setMessages((prev) => [...prev, {
+                      id: (Date.now() + 4).toString(),
+                      content: 'Sorry, there was a problem communicating with the AI Assistant (Test Button). ' + (err instanceof Error ? err.message : ''),
+                      sender: 'system',
+                      timestamp: new Date(),
+                    }]);
                   }
-                } catch (err) {
-                  openaiResult = 'Sorry, there was a problem processing the response with OpenAI.';
-                }
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    id: (Date.now() + 3).toString(),
-                    content: openaiResult,
+                } else {
+                   // If astrology API call itself failed, the error message is already in 'reply'
+                   // and will be displayed by the existing logic.
+                   setMessages((prev) => [...prev, {
+                    id: (Date.now() + 1).toString(), // Ensure unique ID
+                    content: reply, // This already contains the error from astrology API
                     sender: 'system',
                     timestamp: new Date(),
-                  },
-                ]);
+                  }]);
+                  console.log('Skipping Assistant API call (Test Button) due to Astrology API error.');
+                }
               } catch (err) {
                 setMessages((prev) => [
                   ...prev,
