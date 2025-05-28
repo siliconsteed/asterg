@@ -7,6 +7,7 @@ interface UserDetails {
   pob: string;
   lat: number;
   lon: number;
+  timezone: number;
 }
 
 interface UserDetailsFormProps {
@@ -28,6 +29,7 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
     pob: '',
     lat: 0,
     lon: 0,
+    timezone: 5.5, // Default to IST
   });
 
   const [preview, setPreview] = useState<string>('');
@@ -134,6 +136,18 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
           required
         />
       </div>
+      <label className="block font-medium mb-1 mt-2">Timezone (e.g. 5.5 for IST, -7 for PDT)</label>
+      <input
+        type="number"
+        name="timezone"
+        placeholder="Timezone"
+        value={form.timezone}
+        onChange={handleChange}
+        className="border p-2 rounded"
+        step="0.25"
+        disabled={disabled}
+        required
+      />
       <div className="flex gap-2 mt-2">
         <button
           type="button"

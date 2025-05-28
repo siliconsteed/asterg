@@ -11,7 +11,7 @@ export interface User {
 export interface ChatMessage {
   id: string;
   content: string;
-  sender: 'user' | 'system';
+  sender: 'user' | 'system' | 'assistant';
   timestamp: Date;
 }
 
