@@ -2,6 +2,7 @@ import './globals.css'
 import type { Metadata } from 'next'
 import Script from 'next/script';
 import Footer from '@/components/Footer';
+import Header from '@/components/Header'; // Added Header import
 
 export const metadata: Metadata = {
   title: 'AIstroGPT',
@@ -31,6 +32,7 @@ export default function RootLayout({
         </Script>
       </head>
       <body className="min-h-screen bg-gray-50 flex flex-col">
+        <Header /> {/* Added Header component */}
         {children}
         <Footer />
       </body>
