@@ -1,18 +1,5 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-// Try multiple ways to get the API key
-// IMPORTANT: After editing .env.local, you MUST restart your dev server for changes to take effect.
-let FREE_ASTRO_API_KEY = process.env.FREE_ASTRO_API_KEY;
-console.log('[Astrology API] FREE_ASTRO_API_KEY is', FREE_ASTRO_API_KEY ? 'SET' : 'NOT SET');
-
-// Always use environment variables for API keys in production.
-if (!FREE_ASTRO_API_KEY) {
-  console.error('FREE_ASTRO_API_KEY is missing! Set it in your .env.local file.');
-}
-
-// Debug: Log API key status
-console.log('Astrology API:', FREE_ASTRO_API_KEY ? 'Using API key' : 'No API key available');
-
 
 // Helper function to log requests
 function logRequestDetails(request) {
@@ -30,7 +17,7 @@ export async function POST(request) {
     
     console.log('Request body:', JSON.stringify(body, null, 2));
     
-    if (!FREE_ASTRO_API_KEY) {
+    if (!process.env.FREE_ASTRO_API_KEY) {
       const errorMsg = 'Missing FREE_ASTRO_API_KEY environment variable.\n\nTroubleshooting steps:\n1. Ensure .env.local exists in your project root.\n2. Add FREE_ASTRO_API_KEY=your_actual_key_here to .env.local.\n3. Restart your dev server after editing .env.local.';
       console.error(errorMsg);
       return NextResponse.json(
@@ -65,7 +52,7 @@ export async function POST(request) {
       url: 'https://json.freeastrologyapi.com/planets',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': FREE_ASTRO_API_KEY
+        'x-api-key': process.env.FREE_ASTRO_API_KEY
       },
       data: {
         year: body.year,

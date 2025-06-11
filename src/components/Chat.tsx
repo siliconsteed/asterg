@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ChatMessage } from '@/types';
 import { ClockIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient'; // Added for Supabase integration
 
 const responses = [
   'the stars indicate a period of growth and opportunity ahead.',
@@ -195,9 +196,20 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
           body: JSON.stringify(payload),
         });
 
-        const astroDataResp = await astroRes.json();
-        
-        if (astroRes.ok) {
+        // --- START: Improved Error Handling ---
+        if (!astroRes.ok) {
+          const errorText = await astroRes.text(); // Get the HTML error page content
+          console.error('--- ASTROLOGY API FAILED ---');
+          console.error('Status:', astroRes.status, astroRes.statusText);
+          console.error('Response Body (HTML):', errorText);
+          // Create a new error to be caught by the catch block below
+          throw new Error(`Astrology API request failed with status ${astroRes.status}. Check the browser console for the full HTML error response.`);
+        }
+
+        const astroDataResp = await astroRes.json(); // This will only run if astroRes.ok is true
+        // --- END: Improved Error Handling ---
+
+        if (astroRes.ok) { // This check is now slightly redundant but harmless
           setAstroData(astroDataResp);
           localStorage.setItem('astroData', JSON.stringify(astroDataResp));
           const astroConfirmationMsg: ChatMessage = {
@@ -223,6 +235,7 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
           if (assistantRes.ok && assistantData.result && assistantData.thread_id) {
             setThreadId(assistantData.thread_id);
             localStorage.setItem('threadId', assistantData.thread_id);
+
             setMessages((prev) => [
               ...prev,
               {
@@ -261,30 +274,30 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
   // (other hooks or declarations can be here)
 
   return (
-    <div className="flex flex-col h-[95vh] max-w-5xl w-full mx-auto p-8 bg-gradient-to-b from-indigo-50 via-white to-white rounded-2xl shadow-2xl border border-indigo-100">
-      <div className="flex items-center mb-6 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
-        <span className="text-xl font-bold text-indigo-800">AIstroGPT chat</span>
+    <div className="flex flex-col flex-grow p-6 bg-gradient-to-b from-indigo-50 via-white to-white rounded-2xl shadow-xl border border-indigo-100">
+      <div className="flex items-center mb-4 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
+        <span className="text-xl font-semibold text-indigo-700">AIstroGPT Chat</span>
       </div>
-      <div className="flex-1 overflow-y-auto mb-6 space-y-6 rounded-xl p-4 bg-white/80 backdrop-blur-sm border border-indigo-100">
+      <div className="flex-1 overflow-y-auto mb-4 space-y-3 rounded-xl p-4 bg-white/80 backdrop-blur-sm border border-indigo-100">
         {messages.map((message) => (
           <div
             key={message.id}
             className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[75%] relative p-5 mb-2 rounded-3xl shadow-lg transition-all duration-200
+              className={`max-w-[75%] relative p-3 mb-2 rounded-xl shadow-md transition-all duration-200
                 ${message.sender === 'user'
-                  ? 'bg-gradient-to-br from-indigo-500 via-indigo-400 to-indigo-600 text-white border border-indigo-300'
-                  : 'bg-gradient-to-br from-white via-indigo-50 to-indigo-100 text-gray-900 border border-indigo-100'}
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-800 border border-gray-200'}
               `}
             >
-              <span className="absolute top-3 left-[-12px] w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-indigo-100 hidden md:block" style={{ display: message.sender === 'user' ? 'none' : 'block' }} />
-              <span className="absolute top-3 right-[-12px] w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-l-8 border-l-indigo-500 hidden md:block" style={{ display: message.sender === 'user' ? 'block' : 'none' }} />
+              <span className="absolute top-3 left-[-12px] w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-100 hidden md:block" style={{ display: message.sender === 'user' ? 'none' : 'block' }} />
+              <span className="absolute top-3 right-[-12px] w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-l-8 border-l-indigo-600 hidden md:block" style={{ display: message.sender === 'user' ? 'block' : 'none' }} />
               <p className="text-[16px] leading-relaxed whitespace-pre-line">{message.content}</p>
-              <p className={`text-xs font-semibold ${message.sender === 'user' ? 'text-indigo-700' : 'text-indigo-400'} mt-1`}>
+              <p className={`text-xs font-medium ${message.sender === 'user' ? 'text-indigo-200' : 'text-gray-600'} mt-1`}>
                 {message.sender === 'user' ? 'You' : message.sender === 'system' ? 'AIstroGPT' : message.sender}
               </p>
-              <p className={`text-xs mt-2 ${message.sender === 'user' ? 'text-indigo-200' : 'text-gray-400'}`}>
+              <p className={`text-xs mt-2 ${message.sender === 'user' ? 'text-indigo-300' : 'text-gray-500'}`}>
                 {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
@@ -299,10 +312,16 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={isTyping ? 'AIstroGPT is thinking...' : 'Type your message...'}
-          className="flex-1 p-4 bg-white border border-indigo-200 rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+          className="flex-1 p-3 bg-white border border-indigo-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
           disabled={isTyping}
         />
-
+        <button
+          type="submit"
+          className="px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50"
+          disabled={isTyping || !input.trim()}
+        >
+          Send
+        </button>
       </form>
       {apiTest === 1 && (
         <div className="flex justify-center gap-3 mt-4">
@@ -461,7 +480,7 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
             }}
             disabled={isTyping}
           >
-            Send
+            Start/Send
           </button>
           <button
             onClick={() => {

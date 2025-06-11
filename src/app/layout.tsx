@@ -1,10 +1,11 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import Script from 'next/script'
+import Script from 'next/script';
+import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
   title: 'AIstroGPT',
-  description: 'Your personal astrological assistant with AI capabilities',
+  description: 'Your personal astrological assistant with AI capabilities that can give insights based on planets in their zodiac signs.',
 }
 
 export default function RootLayout({
@@ -29,8 +30,9 @@ export default function RootLayout({
           `}
         </Script>
       </head>
-      <body className="min-h-screen bg-gray-50">
+      <body className="min-h-screen bg-gray-50 flex flex-col">
         {children}
+        <Footer />
       </body>
     </html>
   )
