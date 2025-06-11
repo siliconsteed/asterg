@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Chat from '@/components/Chat';
 import UserDetailsForm from '@/components/UserDetailsForm';
 import { useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function ChatPage() {
   const [userDetails, setUserDetails] = useState<any>(null);
@@ -15,9 +16,43 @@ export default function ChatPage() {
     router.push('/');
   };
 
-  const handleSetData = (details: any) => {
+  const handleSetData = async (details: any) => {
+    console.log('--- MARKER 1: handleSetData triggered ---');
+    console.log('Received details object:', details);
+
     setUserDetails(details);
     setDetailsSet(true);
+
+    // ---- Send user details to Supabase ----
+    try {
+      const dataToInsert = {
+        username: details.email,
+        dob: details.dob,
+        tob: details.tob,
+        pob: details.pob,
+        lat: Math.round(details.lat),
+        long: Math.round(details.lon),
+        timezone: String(details.timezone),
+      };
+
+      console.log('--- MARKER 2: Attempting to insert the following data into Supabase ---');
+      console.log(dataToInsert);
+
+      const { data, error: supabaseError } = await supabase
+        .from('Aistrogptuser')
+        .insert([dataToInsert])
+        .select(); // .select() will return the inserted data, which is useful for debugging
+
+      if (supabaseError) {
+        console.error('--- MARKER 3: Supabase returned an error ---', supabaseError);
+      } else {
+        console.log('--- MARKER 4: Supabase insert successful! ---');
+        console.log('Data returned from Supabase:', data);
+      }
+    } catch (err) {
+      console.error('--- MARKER 5: An exception was caught during the Supabase operation ---', err);
+    }
+    // ---- End Supabase ----
   };
 
   return (
@@ -26,7 +61,7 @@ export default function ChatPage() {
         <h1 className="text-4xl font-bold text-center text-primary mb-8">
           AIstroGPT chat
         </h1>
-        <div className="flex flex-row gap-8 justify-center items-start">
+        <div className="flex flex-col gap-8 justify-center items-center">
           <UserDetailsForm onSetData={handleSetData} disabled={detailsSet} />
           <div className="flex-1 min-w-[400px]">
             <Chat onEndChat={handleEndChat} userDetails={userDetails} disabled={!detailsSet} />
