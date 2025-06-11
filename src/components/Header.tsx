@@ -11,8 +11,8 @@ const Header = () => {
             <Image
               src="/assets/sundial.jpg" // You updated this to .jpg
               alt="Site Logo"
-              width={100} // Slightly adjusted, feel free to change
-              height={35}  // Slightly adjusted, feel free to change
+              width={75} // Slightly adjusted, feel free to change
+              height={27}  // Slightly adjusted, feel free to change
               priority
             />
             {/* Optional: Add site title next to the logo */}
