@@ -63,8 +63,10 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
 
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-
+  
+  // Countdown timer states
+  const [timerStarted, setTimerStarted] = useState(false);
+  const [countdown, setCountdown] = useState(10 * 60); // 10 minutes in seconds
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -81,6 +83,29 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
     if (storedAstro) setAstroData(JSON.parse(storedAstro));
     if (storedThreadId) setThreadId(storedThreadId);
   }, []);
+  
+  // Countdown timer effect
+  useEffect(() => {
+    let timerInterval: NodeJS.Timeout | null = null;
+    
+    if (timerStarted && countdown > 0) {
+      timerInterval = setInterval(() => {
+        setCountdown(prevTime => {
+          if (prevTime <= 1) {
+            clearInterval(timerInterval!);
+            // Redirect to home page when timer reaches zero
+            router.push('/');
+            return 0;
+          }
+          return prevTime - 1;
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (timerInterval) clearInterval(timerInterval);
+    };
+  }, [timerStarted, countdown, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,6 +113,8 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
 
     if (!chatStarted) {
       setChatStarted(true);
+      // Start countdown timer when chat starts
+      setTimerStarted(true);
     }
 
     const userMessage: ChatMessage = {
@@ -315,186 +342,195 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
           className="flex-1 p-3 bg-white border border-indigo-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
           disabled={isTyping}
         />
-        <button
-          type="submit"
-          className="px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50"
-          disabled={isTyping || !input.trim()}
-        >
-          Send
-        </button>
+        {timerStarted && (
+          <div className="px-4 py-2 bg-indigo-100 text-indigo-800 rounded-lg shadow font-medium text-sm flex items-center">
+            <ClockIcon className="w-4 h-4 mr-1" />
+            {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
+          </div>
+        )}
       </form>
-      {apiTest === 1 && (
-        <div className="flex justify-center gap-3 mt-4">
+      <div className="flex justify-center gap-3 mt-4">
+        {apiTest === 1 && (
           <button
-            className="px-5 py-2 bg-indigo-500 text-white rounded-xl shadow hover:bg-indigo-600 transition-all duration-200 font-medium"
+            className="px-5 py-2 bg-indigo-600 text-white rounded-xl shadow hover:bg-indigo-700 transition-all duration-200 font-medium"
             onClick={async () => {
               setIsTyping(true);
+              // Start the countdown timer when Test API button is clicked
+              if (!timerStarted) {
+                setTimerStarted(true);
+              }
               setMessages((prev) => [...prev, {
                 id: Date.now().toString(),
                 content: 'Sending data to Astro API...',
                 sender: 'user',
                 timestamp: new Date(),
               }]);
-              try {
-                if (!userDetails) {
-                  setIsTyping(false);
-                  setMessages((prev) => [...prev, {
-                    id: Date.now().toString(),
-                    content: 'Please set your details in the form before sending.',
-                    sender: 'system',
-                    timestamp: new Date(),
-                  }]);
-                  return;
-                }
-                const [yearStr, monthStr, dateStr] = userDetails.dob.replace(/-/g, '/').split('/');
-                const [hoursStr, minutesStr] = userDetails.tob.split(':');
+            try {
+              if (!userDetails) {
+                setIsTyping(false);
+                setMessages((prev) => [...prev, {
+                  id: Date.now().toString(),
+                  content: 'Please set your details in the form before sending.',
+                  sender: 'system',
+                  timestamp: new Date(),
+                }]);
+                return;
+              }
+              const [yearStr, monthStr, dateStr] = userDetails.dob.replace(/-/g, '/').split('/');
+              const [hoursStr, minutesStr] = userDetails.tob.split(':');
 
-                const year = parseInt(yearStr, 10);
-                const month = parseInt(monthStr, 10);
-                const date = parseInt(dateStr, 10);
-                const hours = parseInt(hoursStr, 10);
-                const minutes = parseInt(minutesStr, 10);
+              const year = parseInt(yearStr, 10);
+              const month = parseInt(monthStr, 10);
+              const date = parseInt(dateStr, 10);
+              const hours = parseInt(hoursStr, 10);
+              const minutes = parseInt(minutesStr, 10);
 
-                if (isNaN(year) || isNaN(month) || isNaN(date) || isNaN(hours) || isNaN(minutes) || 
-                    String(yearStr).length !== 4 || month < 1 || month > 12 || date < 1 || date > 31 || // Basic validation
-                    hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-                  setMessages((prev) => [...prev, {
-                    id: Date.now().toString(),
-                    content: `Error: Invalid Date of Birth or Time of Birth. Please ensure DOB is YYYY/MM/DD and TOB is HH:MM. Received DOB: '${userDetails.dob}', TOB: '${userDetails.tob}'`,
-                    sender: 'system',
-                    timestamp: new Date(),
-                  }]);
-                  setIsTyping(false);
-                  return;
-                }
+              if (isNaN(year) || isNaN(month) || isNaN(date) || isNaN(hours) || isNaN(minutes) || 
+                  String(yearStr).length !== 4 || month < 1 || month > 12 || date < 1 || date > 31 || // Basic validation
+                  hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+                setMessages((prev) => [...prev, {
+                  id: Date.now().toString(),
+                  content: `Error: Invalid Date of Birth or Time of Birth. Please ensure DOB is YYYY/MM/DD and TOB is HH:MM. Received DOB: '${userDetails.dob}', TOB: '${userDetails.tob}'`,
+                  sender: 'system',
+                  timestamp: new Date(),
+                }]);
+                setIsTyping(false);
+                return;
+              }
 
-                const payload = {
-                  year,
-                  month,
-                  date,
-                  hours,
-                  minutes,
-                  latitude: userDetails.lat,
-                  longitude: userDetails.lon,
-                  timezone: userDetails.timezone,
-                };
+              const payload = {
+                year,
+                month,
+                date,
+                hours,
+                minutes,
+                latitude: userDetails.lat,
+                longitude: userDetails.lon,
+                timezone: userDetails.timezone,
+              };
 
-                const res = await fetch('/api/astrology', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(payload),
-                });
+                try {
+                  const res = await fetch('/api/astrology', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                  });
 
-                const data = await res.json();
-                let reply = '';
-                let rawApiResponse = ''; // Keep this if you want to log raw response elsewhere
+                  const data = await res.json();
+                  let reply = '';
+                  let rawApiResponse = ''; // Keep this if you want to log raw response elsewhere
 
-                if (res.ok) {
-                  reply = 'Astrology API Response:\n' + JSON.stringify(data, null, 2);
-                  rawApiResponse = JSON.stringify(data, null, 2);
-                } else if (data.error) {
-                  reply = 'Astrology API Error: ' + (data.details || data.error);
-                  rawApiResponse = JSON.stringify(data, null, 2);
-                } else {
-                  reply = 'Received an unexpected response from Astrology API: ' + JSON.stringify(data, null, 2);
-                  rawApiResponse = JSON.stringify(data, null, 2);
-                }
+                  if (res.ok) {
+                    reply = 'Astrology API Response:\n' + JSON.stringify(data, null, 2);
+                    rawApiResponse = JSON.stringify(data, null, 2);
+                  } else if (data.error) {
+                    reply = 'Astrology API Error: ' + (data.details || data.error);
+                    rawApiResponse = JSON.stringify(data, null, 2);
+                  } else {
+                    reply = 'Received an unexpected response from Astrology API: ' + JSON.stringify(data, null, 2);
+                    rawApiResponse = JSON.stringify(data, null, 2);
+                  }
 
-                // If astrology API call was successful, 'reply' contains the astrology data string.
-                // 'data' here is the JSON object from /api/astrology.
-                if (res.ok) {
-                  try {
-                    setMessages((prevMessages) => [
-                      ...prevMessages,
-                      {
-                        id: (Date.now() + 2).toString(),
-                        content: 'Sending astrology data to AI Assistant ...',
+                  // If astrology API call was successful, 'reply' contains the astrology data string.
+                  // 'data' here is the JSON object from /api/astrology.
+                  if (res.ok) {
+                    try {
+                      setMessages((prevMessages) => [
+                        ...prevMessages,
+                        {
+                          id: (Date.now() + 2).toString(),
+                          content: 'Sending astrology data to AI Assistant ...',
+                          sender: 'system',
+                          timestamp: new Date(),
+                        },
+                      ]);
+                      // For the test button, let's assume there's no separate 'userQuery' like the main chat input.
+                      // We'll send a generic query or just the astrology data.
+                      // For consistency, let's define a userQuery for the test button scenario.
+                      const testButtonUserQuery = 'Provide insights based on the following astrology data.';
+
+                      const assistantRes = await fetch('/api/assistant', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          astrologyData: data, // 'data' is the JSON object from /api/astrology
+                          userQuery: testButtonUserQuery, 
+                        }),
+                      });
+                      const assistantData = await assistantRes.json();
+                      let assistantResult = '';
+                      if (assistantRes.ok && assistantData.result) {
+                        assistantResult = assistantData.result;
+                      } else if (assistantData.error) {
+                        assistantResult = 'AI Assistant Error (Test Button): ' + assistantData.error;
+                      } else {
+                        assistantResult = 'Unexpected response from AI Assistant (Test Button).';
+                      }
+                      setMessages((prev) => [
+                        ...prev,
+                        {
+                          id: (Date.now() + 3).toString(),
+                          content: assistantResult,
+                          sender: 'system',
+                          timestamp: new Date(),
+                        },
+                      ]);
+                    } catch (err) {
+                      console.error('Error calling /api/assistant (Test Button):', err);
+                      setMessages((prev) => [...prev, {
+                        id: (Date.now() + 4).toString(),
+                        content: 'Sorry, there was a problem communicating with the AI Assistant (Test Button). ' + (err instanceof Error ? err.message : ''),
                         sender: 'system',
                         timestamp: new Date(),
-                      },
-                    ]);
-                    // For the test button, let's assume there's no separate 'userQuery' like the main chat input.
-                    // We'll send a generic query or just the astrology data.
-                    // For consistency, let's define a userQuery for the test button scenario.
-                    const testButtonUserQuery = 'Provide insights based on the following astrology data.';
-
-                    const assistantRes = await fetch('/api/assistant', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        astrologyData: data, // 'data' is the JSON object from /api/astrology
-                        userQuery: testButtonUserQuery, 
-                      }),
-                    });
-                    const assistantData = await assistantRes.json();
-                    let assistantResult = '';
-                    if (assistantRes.ok && assistantData.result) {
-                      assistantResult = assistantData.result;
-                    } else if (assistantData.error) {
-                      assistantResult = 'AI Assistant Error (Test Button): ' + assistantData.error;
-                    } else {
-                      assistantResult = 'Unexpected response from AI Assistant (Test Button).';
+                      }]);
                     }
-                    setMessages((prev) => [
-                      ...prev,
-                      {
-                        id: (Date.now() + 3).toString(),
-                        content: assistantResult,
-                        sender: 'system',
-                        timestamp: new Date(),
-                      },
-                    ]);
-                  } catch (err) {
-                    console.error('Error calling /api/assistant (Test Button):', err);
-                    setMessages((prev) => [...prev, {
-                      id: (Date.now() + 4).toString(),
-                      content: 'Sorry, there was a problem communicating with the AI Assistant (Test Button). ' + (err instanceof Error ? err.message : ''),
+                  } else {
+                     // If astrology API call itself failed, the error message is already in 'reply'
+                     // and will be displayed by the existing logic.
+                     setMessages((prev) => [...prev, {
+                      id: (Date.now() + 1).toString(), // Ensure unique ID
+                      content: reply, // This already contains the error from astrology API
                       sender: 'system',
                       timestamp: new Date(),
                     }]);
+                    console.log('Skipping Assistant API call (Test Button) due to Astrology API error.');
                   }
-                } else {
-                   // If astrology API call itself failed, the error message is already in 'reply'
-                   // and will be displayed by the existing logic.
-                   setMessages((prev) => [...prev, {
-                    id: (Date.now() + 1).toString(), // Ensure unique ID
-                    content: reply, // This already contains the error from astrology API
+                } catch (err) {
+                  console.error('Error during astrology API call:', err);
+                  setMessages((prev) => [...prev, {
+                    id: (Date.now() + 5).toString(),
+                    content: 'Error fetching astrology data: ' + (err instanceof Error ? err.message : String(err)),
                     sender: 'system',
                     timestamp: new Date(),
                   }]);
-                  console.log('Skipping Assistant API call (Test Button) due to Astrology API error.');
                 }
-              } catch (err) {
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    id: (Date.now() + 4).toString(),
-                    content: '[Test API] An unexpected error occurred: ' + (err instanceof Error ? err.message : String(err)),
-                    sender: 'system',
-                    timestamp: new Date(),
-                  },
-                ]);
-              } finally {
-                setIsTyping(false);
-              }
-            }}
-            disabled={isTyping}
-          >
-            Start/Send
-          </button>
-          <button
-            onClick={() => {
-              if (window.confirm('Are you sure you want to end this chat session?')) {
-                onEndChat();
-              }
-            }}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg shadow hover:bg-red-700 transition-all duration-200 font-medium text-sm flex items-center"
-          >
-            <XMarkIcon className="w-4 h-4 mr-1" />
-            End Chat
-          </button>
-        </div>
+              setIsTyping(false);
+            } catch (err) {
+              console.error('Test button error:', err);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: (Date.now() + 4).toString(),
+                  content: '[Test API] An unexpected error occurred: ' + (err instanceof Error ? err.message : String(err)),
+                  sender: 'system',
+                  timestamp: new Date(),
+                },
+              ]);
+              setIsTyping(false);
+            }
+          }}
+        >
+          Test Astro API
+        </button>
       )}
+        <button
+          onClick={onEndChat}
+          className="px-4 py-2 bg-red-600 text-white rounded-lg shadow hover:bg-red-700 transition-all duration-200 font-medium text-sm flex items-center"
+        >
+          <XMarkIcon className="w-4 h-4 mr-1" />
+          End Chat
+        </button>
+      </div>
     </div>
   );
 }
