@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { ChatMessage } from '@/types';
-import { ClockIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, XMarkIcon, CreditCardIcon } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient'; // Added for Supabase integration
+import Script from 'next/script';
+import { initializePayPalButton } from '@/lib/paypalClient';
+import { initializeRazorpayCheckout } from '@/lib/razorpayClient';
 
 const responses = [
   'the stars indicate a period of growth and opportunity ahead.',
@@ -29,8 +32,107 @@ interface UserDetails {
   timezone: number;
 }
 
+// Validation results interface
+interface ValidationResult {
+  isValid: boolean;
+  errorMessage?: string;
+}
+
+// Function to validate user details comprehensively - returns result object
+// but doesn't add messages to the chat
+const validateUserDetails = (details: UserDetails | undefined): ValidationResult => {
+  // Check if details exist
+  if (!details) {
+    return { isValid: false, errorMessage: 'User details are not available.' };
+  }
+  
+  // Destructure for easier access
+  const { email, dob, tob, pob, lat, lon, timezone } = details;
+  
+  // Check all required fields are present
+  if (!email || !dob || !tob || !pob || lat === undefined || lon === undefined || timezone === undefined) {
+    return { 
+      isValid: false, 
+      errorMessage: 'Please fill in all required fields (Email, Date of Birth, Time of Birth, Place of Birth, Coordinates).' 
+    };
+  }
+  
+  // Validate email format using regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return { isValid: false, errorMessage: 'Please enter a valid email address.' };
+  }
+  
+  // Validate date format and values
+  try {
+    const [yearStr, monthStr, dateStr] = dob.replace(/-/g, '/').split('/');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const date = parseInt(dateStr, 10);
+    
+    if (isNaN(year) || isNaN(month) || isNaN(date) || String(yearStr).length !== 4 || 
+        month < 1 || month > 12 || date < 1 || date > 31) {
+      return { 
+        isValid: false, 
+        errorMessage: `Invalid Date of Birth format. Please use YYYY/MM/DD or YYYY-MM-DD format. Received: '${dob}'` 
+      };
+    }
+    
+    // Additional date validation (e.g., February having max 29 days in leap years)
+    const maxDaysInMonth = new Date(year, month, 0).getDate();
+    if (date > maxDaysInMonth) {
+      return { 
+        isValid: false, 
+        errorMessage: `Invalid date. ${month}/${year} has only ${maxDaysInMonth} days.` 
+      };
+    }
+  } catch (error) {
+    return { 
+      isValid: false, 
+      errorMessage: `Invalid Date of Birth format. Please use YYYY/MM/DD or YYYY-MM-DD format. Received: '${dob}'` 
+    };
+  }
+  
+  // Validate time format and values
+  try {
+    const [hoursStr, minutesStr] = tob.split(':');
+    const hours = parseInt(hoursStr, 10);
+    const minutes = parseInt(minutesStr, 10);
+    
+    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      return { 
+        isValid: false, 
+        errorMessage: `Invalid Time of Birth format. Please use HH:MM (24-hour) format. Received: '${tob}'` 
+      };
+    }
+  } catch (error) {
+    return { 
+      isValid: false, 
+      errorMessage: `Invalid Time of Birth format. Please use HH:MM format. Received: '${tob}'` 
+    };
+  }
+  
+  // Validate coordinates
+  if (typeof lat !== 'number' || isNaN(lat) || lat < -90 || lat > 90) {
+    return { isValid: false, errorMessage: 'Latitude must be a number between -90 and 90.' };
+  }
+  
+  if (typeof lon !== 'number' || isNaN(lon) || lon < -180 || lon > 180) {
+    return { isValid: false, errorMessage: 'Longitude must be a number between -180 and 180.' };
+  }
+  
+  // Validate timezone (basic validation)
+  if (typeof timezone !== 'number' || isNaN(timezone) || timezone < -12 || timezone > 14) {
+    return { isValid: false, errorMessage: 'Timezone must be a number between -12 and 14.' };
+  }
+  
+  // All validations passed
+  return { isValid: true };
+};
+
 interface ChatProps {
   onEndChat: () => void;
+  onReturnToDetails: () => void; // Required callback to return to details form when validation fails
   userDetails?: UserDetails;
   disabled?: boolean;
 }
@@ -38,7 +140,23 @@ interface ChatProps {
 // Set to 1 to show the Test Astro API button
 const apiTest = 1; // Only used for the lower button beside End Chat
 
-export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
+// Set to 0 to bypass payment flow, 1 to show payment options
+const skipPayment: number = 0; // When 0, payment step is skipped
+
+// Set to 1 to disable Razorpay, 0 to enable it
+const disableRazorpay: number = 1; // When 1, Razorpay payment option is disabled
+
+export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabled }: ChatProps) {
+  // PayPal script loading state
+  const [paypalLoaded, setPaypalLoaded] = useState(false);
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+  // State for validation errors and data confirmation
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [dataConfirmed, setDataConfirmed] = useState(false);
+  const [showChatSection, setShowChatSection] = useState(false);
+  const [showPaymentSection, setShowPaymentSection] = useState(false);
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
   // ...state hooks...
 
   // Reset chat (clears localStorage and state)
@@ -76,6 +194,132 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
     scrollToBottom();
   }, [messages]);
 
+  // Function to validate user data and show error if invalid
+  const validateAndConfirmUserData = () => {
+    if (!userDetails) {
+      setValidationError('User details are not available.');
+      // Return to details form when validation fails
+      onReturnToDetails();
+      return false;
+    }
+    
+    const validation = validateUserDetails(userDetails);
+    if (!validation.isValid) {
+      setValidationError(validation.errorMessage || 'Invalid user details.');
+      // Return to details form when validation fails
+      onReturnToDetails();
+      return false;
+    }
+    
+    // If valid, clear error and prepare for confirmation
+    setValidationError(null);
+    return true;
+  };
+
+  // Handle the Set Data button click
+  const handleSetDataClick = () => {
+    if (validateAndConfirmUserData()) {
+      setDataConfirmed(true);
+    } else {
+      // Reset confirmation status if validation fails
+      setDataConfirmed(false);
+      // Return to details form for editing
+      onReturnToDetails();
+    }
+  };
+
+  // Handle user confirmation of data
+  const handleConfirmData = () => {
+    if (skipPayment === 0) {
+      // Skip payment and go directly to chat
+      setShowChatSection(true);
+      // Start the timer when user confirms data and enters chat
+      if (!timerStarted) {
+        setTimerStarted(true);
+      }
+    } else {
+      // Show payment options
+      setShowPaymentSection(true);
+    }
+  };
+  
+  // With Razorpay disabled, auto-select PayPal
+  useEffect(() => {
+    if (showPaymentSection && (disableRazorpay === 1 || !razorpayLoaded)) {
+      setSelectedPaymentMethod('paypal');
+    }
+  }, [showPaymentSection, disableRazorpay, razorpayLoaded]);
+  
+  // Handle payment completion
+  const handlePaymentComplete = (details: any) => {
+    console.log('Payment completed', details);
+    setPaymentCompleted(true);
+    setShowPaymentSection(false);
+    setShowChatSection(true);
+    // Start the timer when user completes payment and enters chat
+    if (!timerStarted) {
+      setTimerStarted(true);
+    }
+  };
+  
+  // Handle payment error
+  const handlePaymentError = (error: any) => {
+    console.error('Payment error:', error);
+    alert('There was an error processing your payment. Please try again.');
+  };
+  
+  // Process payment based on selected payment method
+  const processPayment = () => {
+    if (selectedPaymentMethod === 'paypal' && paypalLoaded) {
+      // Render PayPal button in the paypal-button-container
+      initializePayPalButton(
+        'paypal-button-container', 
+        5.00, // $5 USD
+        handlePaymentComplete,
+        handlePaymentError
+      );
+    } else if (selectedPaymentMethod === 'razorpay' && razorpayLoaded && disableRazorpay === 0) {
+      // Launch Razorpay checkout with user details if available
+      initializeRazorpayCheckout(
+        5.00, // $5 USD
+        'USD',
+        handlePaymentComplete,
+        handlePaymentError,
+        userDetails ? { 
+          email: userDetails.email,
+          // You could add name and phone if you collect those
+        } : undefined
+      );
+    } else {
+      // Fallback for development/testing without payment SDKs
+      alert('Processing payment with ' + selectedPaymentMethod);
+      // Simulate payment processing
+      setTimeout(() => {
+        handlePaymentComplete({ status: 'COMPLETED', id: 'test-' + Date.now() });
+      }, 1500);
+    }
+  };
+  
+  
+  
+  // Handle script load events
+  const handlePayPalScriptLoad = () => {
+    setPaypalLoaded(true);
+    console.log('PayPal script loaded');
+  };
+  
+  const handleRazorpayScriptLoad = () => {
+    setRazorpayLoaded(true);
+    console.log('Razorpay script loaded');
+  };
+
+  // Handle user cancellation of data confirmation
+  const handleCancelConfirm = () => {
+    setDataConfirmed(false);
+    // Return to details form for editing
+    onReturnToDetails();
+  };
+
   // Restore astroData and threadId from localStorage on mount
   useEffect(() => {
     const storedAstro = localStorage.getItem('astroData');
@@ -83,7 +327,7 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
     if (storedAstro) setAstroData(JSON.parse(storedAstro));
     if (storedThreadId) setThreadId(storedThreadId);
   }, []);
-  
+
   // Countdown timer effect
   useEffect(() => {
     let timerInterval: NodeJS.Timeout | null = null;
@@ -120,7 +364,7 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       content: input, // content will be taken from currentInput later
-      sender: 'user',
+      sender: 'user' as 'user',
       timestamp: new Date(),
     };
     // Store current input *before* clearing and adding user message to UI
@@ -128,409 +372,567 @@ export default function Chat({ onEndChat, userDetails, disabled }: ChatProps) {
     setMessages((prev) => [...prev, { ...userMessage, content: currentInput }]); // Use currentInput for UI
     setInput('');
     setIsTyping(true);
-
-    // If we already have astrology data and threadId, skip astrology API and go straight to OpenAI
-    if (astroData && threadId) {
-      try {
+    
+    try {
+      // If we have astrology data and a thread ID from previous calls
+      if (astroData && threadId) {
+        // For subsequent messages in a thread, include the thread ID
         const assistantRes = await fetch('/api/assistant', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            userQuery: currentInput,
-            threadId: threadId, // Send existing thread ID
+            threadId, // Send the current thread ID for conversation continuity
+            userQuery: currentInput, // The user's message
           }),
         });
+        
         const assistantData = await assistantRes.json();
-        let assistantResult = '';
+        
         if (assistantRes.ok && assistantData.result) {
-          assistantResult = assistantData.result;
+          // Add the assistant's response to the chat
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: (Date.now() + 1).toString(),
+              content: assistantData.result,
+              sender: 'system' as 'system',
+              timestamp: new Date(),
+            },
+          ]);
         } else if (assistantData.error) {
-          assistantResult = 'AI Assistant Error: ' + assistantData.error;
+          // Handle API error responses
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: (Date.now() + 1).toString(),
+              content: 'AI Assistant Error: ' + assistantData.error,
+              sender: 'system' as 'system',
+              timestamp: new Date(),
+            },
+          ]);
         } else {
-          assistantResult = 'Unexpected response from AI Assistant.';
+          // Handle unexpected response format
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: (Date.now() + 1).toString(),
+              content: 'Received an unexpected response from the AI Assistant.',
+              sender: 'system' as 'system',
+              timestamp: new Date(),
+            },
+          ]);
         }
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: (Date.now() + .1).toString(), // Unique ID
-            content: assistantResult,
-            sender: 'assistant',
-            timestamp: new Date(),
-          },
-        ]);
-      } catch (err) {
-        console.error('Error calling /api/assistant (subsequent message):', err);
-        setMessages((prev) => [...prev, {
-          id: (Date.now() + .2).toString(),
-          content: 'Sorry, there was a problem communicating with the AI Assistant. ' + (err instanceof Error ? err.message : ''),
-          sender: 'system',
-          timestamp: new Date(),
-        }]);
-      }
-      setIsTyping(false);
-      return;
-    }
-
-    // First message: fetch astrology API, store result, send to OpenAI, get thread_id
-    if (!astroData) {
-      if (!userDetails) {
-        setMessages((prev) => [...prev, {
-          id: (Date.now() + 1).toString(),
-          content: 'User details are not available. Cannot fetch astrology data.',
-          sender: 'system',
-          timestamp: new Date(),
-        }]);
-        setIsTyping(false);
-        return;
-      }
-      const { dob, tob, pob, lat, lon } = userDetails;
-      if (!dob || !tob || !pob || !lat || !lon) {
-        setMessages((prev) => [...prev, {
-          id: (Date.now() + 2).toString(),
-          content: 'Please fill in all required details (Date, Time, Place, Latitude, Longitude) before starting the chat.',
-          sender: 'system',
-          timestamp: new Date(),
-        }]);
-        setIsTyping(false);
-        return;
-      }
-      try {
-        const [yearStr, monthStr, dateStr] = dob.replace(/-/g, '/').split('/');
-        const [hoursStr, minutesStr] = tob.split(':');
-
+      } else {
+        // If we don't have astrology data yet, we need to fetch it first
+        if (!userDetails) {
+          setMessages((prev) => [
+            ...prev, 
+            {
+              id: (Date.now() + 1).toString(),
+              content: 'User details are required to process your query.',
+              sender: 'system' as 'system',
+              timestamp: new Date()
+            }
+          ]);
+          setIsTyping(false);
+          return;
+        }
+        
+        // First-time chat - extract user details and get astrology data
+        const [year, month, date] = userDetails.dob.split('-').map(Number);
+        const [hours, minutes] = userDetails.tob.split(':').map(Number);
+        const { lat, lon, timezone } = userDetails;
+        
+        // Prepare the payload for the astrology API
         const payload = {
-          year: parseInt(yearStr, 10),
-          month: parseInt(monthStr, 10),
-          date: parseInt(dateStr, 10),
-          hours: parseInt(hoursStr, 10),
-          minutes: parseInt(minutesStr, 10),
+          year,
+          month,
+          date,
+          hours,
+          minutes,
           latitude: lat,
           longitude: lon,
-          timezone: userDetails.timezone,
+          timezone
         };
-
-        // Show a message that astrology data is being fetched
-        setMessages((prev) => [...prev, {
-          id: (Date.now() + .1).toString(), // Unique ID
-          content: 'Fetching astrological insights...',
-          sender: 'system',
-          timestamp: new Date(),
-        }]);
-
-        const astroRes = await fetch('/api/astrology', {
+        
+        setMessages((prev) => [
+          ...prev, 
+          {
+            id: (Date.now() + 1).toString(),
+            content: 'Fetching your astrological data...',
+            sender: 'system' as 'system',
+            timestamp: new Date()
+          }
+        ]);
+        
+        // Call the astrology API to get chart data
+        const res = await fetch('/api/astrology', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-
-        // --- START: Improved Error Handling ---
-        if (!astroRes.ok) {
-          const errorText = await astroRes.text(); // Get the HTML error page content
-          console.error('--- ASTROLOGY API FAILED ---');
-          console.error('Status:', astroRes.status, astroRes.statusText);
-          console.error('Response Body (HTML):', errorText);
-          // Create a new error to be caught by the catch block below
-          throw new Error(`Astrology API request failed with status ${astroRes.status}. Check the browser console for the full HTML error response.`);
-        }
-
-        const astroDataResp = await astroRes.json(); // This will only run if astroRes.ok is true
-        // --- END: Improved Error Handling ---
-
-        if (astroRes.ok) { // This check is now slightly redundant but harmless
-          setAstroData(astroDataResp);
-          localStorage.setItem('astroData', JSON.stringify(astroDataResp));
-          const astroConfirmationMsg: ChatMessage = {
-            id: (Date.now() + .2).toString(),
-            content: 'Astrology data fetched. Initializing AI Assistant...',
-            sender: 'system',
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+          let errorMessage = 'Failed to fetch astrological data.';
+          if (data.error) {
+            errorMessage += ' ' + data.error;
+          }
+          
+          setMessages((prev) => [...prev, {
+            id: (Date.now() + 2).toString(),
+            content: errorMessage,
+            sender: 'system' as 'system',
             timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, astroConfirmationMsg]);
-          setAstrologyApiMessage(astroConfirmationMsg);
-
-          // Now send astrology result + user message to the Assistant API endpoint
+          }]);
+          setIsTyping(false);
+          return;
+        }
+        
+        // Store the astrology data for future messages
+        setAstroData(data);
+        
+        setMessages((prev) => [...prev, {
+          id: (Date.now() + 3).toString(),
+          content: 'Astrological data received. Processing your query...',
+          sender: 'system' as 'system',
+          timestamp: new Date(),
+        }]);
+        
+        // Now send both astrology data and user query to the assistant API
+        try {
           const assistantRes = await fetch('/api/assistant', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              astrologyData: astroDataResp,
-              userQuery: currentInput,
+              astrologyData: data, // Send the astrology data
+              userQuery: currentInput, // The user's question/message
             }),
           });
+          
           const assistantData = await assistantRes.json();
-
-          if (assistantRes.ok && assistantData.result && assistantData.thread_id) {
-            setThreadId(assistantData.thread_id);
-            localStorage.setItem('threadId', assistantData.thread_id);
-
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: (Date.now() + .3).toString(),
-                content: assistantData.result,
-                sender: 'assistant',
-                timestamp: new Date(),
-              },
-            ]);
-          } else {
-            const errorMsg = assistantData.error || 'Unexpected response from AI Assistant.';
+          
+          if (assistantRes.ok) {
+            // Save the thread ID if provided for future messages
+            if (assistantData.threadId) {
+              setThreadId(assistantData.threadId);
+            }
+            
+            // Add the assistant's response to the chat
             setMessages((prev) => [...prev, {
-              id: (Date.now() + .3).toString(),
-              content: `AI Assistant Error: ${errorMsg}`,
-              sender: 'system',
+              id: (Date.now() + 4).toString(),
+              content: assistantData.result || 'No response from the AI assistant.',
+              sender: 'system' as 'system',
+              timestamp: new Date(),
+            }]);
+          } else {
+            // Handle API errors
+            setMessages((prev) => [...prev, {
+              id: (Date.now() + 4).toString(),
+              content: 'AI Assistant Error: ' + (assistantData.error || 'Unknown error'),
+              sender: 'system' as 'system',
               timestamp: new Date(),
             }]);
           }
+        } catch (err) {
+          console.error('Error calling assistant API:', err);
+          setMessages((prev) => [...prev, {
+            id: (Date.now() + 4).toString(),
+            content: 'Error processing your query: ' + (err instanceof Error ? err.message : String(err)),
+            sender: 'system' as 'system',
+            timestamp: new Date(),
+          }]);
         }
-      } catch (err) {
-        console.error('Error during first message processing:', err);
+      }
+    } catch (err) {
+      console.error('Error in handleSubmit:', err);
+      setMessages((prev) => [...prev, {
+        id: (Date.now() + 5).toString(),
+        content: 'An unexpected error occurred: ' + (err instanceof Error ? err.message : String(err)),
+        sender: 'system',
+        timestamp: new Date(),
+      }]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  // Function to test the astrology API without starting a chat
+  const handleTestAstroApi = async () => {
+    if (!userDetails) {
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString(),
+        content: 'User details are not available. Please enter your birth details first.',
+        sender: 'system',
+        timestamp: new Date(),
+      }]);
+      return;
+    }
+
+    // Use the comprehensive validation function
+    const validation = validateUserDetails(userDetails);
+    
+    if (!validation.isValid) {
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString(),
+        content: validation.errorMessage || 'Invalid user details. Please check all fields.',
+        sender: 'system',
+        timestamp: new Date(),
+      }]);
+      return;
+    }
+
+    // If validation passed, extract the required fields
+    const { dob, tob, lat, lon, timezone } = userDetails;
+
+    try {
+      setIsTyping(true);
+      
+      // Show a message that astrology data is being fetched
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString(),
+        content: 'Testing astrology API. Fetching astrological insights...',
+        sender: 'system',
+        timestamp: new Date(),
+      }]);
+
+      const [yearStr, monthStr, dateStr] = dob.replace(/-/g, '/').split('/');
+      const [hoursStr, minutesStr] = tob.split(':');
+      
+      const payload = {
+        year: parseInt(yearStr, 10),
+        month: parseInt(monthStr, 10),
+        date: parseInt(dateStr, 10),
+        hours: parseInt(hoursStr, 10),
+        minutes: parseInt(minutesStr, 10),
+        latitude: lat,
+        longitude: lon,
+        timezone,
+      };
+
+      // Call the astrology API
+      const astroRes = await fetch('/api/astrology', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      // Improved Error Handling
+      if (!astroRes.ok) {
+        const errorText = await astroRes.text();
+        console.error('--- ASTROLOGY API TEST FAILED ---');
+        console.error('Status:', astroRes.status, astroRes.statusText);
+        console.error('Response Body:', errorText);
+        throw new Error(`Astrology API request failed with status ${astroRes.status}`);
+      }
+
+      const astroDataResp = await astroRes.json();
+      setAstroData(astroDataResp);
+      localStorage.setItem('astroData', JSON.stringify(astroDataResp));
+      
+      // Display confirmation that astrology data was fetched
+      const astroConfirmationMsg = {
+        id: Date.now().toString(),
+        content: 'Astrology data fetched successfully. Testing AI Assistant with the astrology data...',
+        sender: 'system' as 'system',
+        timestamp: new Date(),
+      };
+      
+      setMessages((prev) => [...prev, astroConfirmationMsg]);
+
+      // Now send astrology data to the Assistant API endpoint for a test response
+      const assistantRes = await fetch('/api/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          astrologyData: astroDataResp,
+          userQuery: 'Give me a brief astrological insight based on this data.',
+        }),
+      });
+
+      const assistantData = await assistantRes.json();
+      
+      if (assistantRes.ok && assistantData.result) {
+        // Save the thread_id if one is returned
+        if (assistantData.thread_id) {
+          setThreadId(assistantData.thread_id);
+          localStorage.setItem('threadId', assistantData.thread_id);
+        }
+        
+        // Display the AI assistant response
         setMessages((prev) => [...prev, {
-          id: (Date.now() + .4).toString(),
-          content: 'Sorry, there was a problem processing your first message. ' + (err instanceof Error ? err.message : String(err)),
-          sender: 'system',
+          id: Date.now().toString(),
+          content: assistantData.result,
+          sender: 'assistant' as 'assistant',
+          timestamp: new Date(),
+        }]);
+      } else {
+        const errorMsg = assistantData.error || 'Unexpected response from AI Assistant.';
+        setMessages((prev) => [...prev, {
+          id: Date.now().toString(),
+          content: `AI Assistant Error: ${errorMsg}`,
+          sender: 'system' as 'system',
           timestamp: new Date(),
         }]);
       }
+    } catch (err) {
+      console.error('Error testing astrology API:', err);
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString(),
+        content: 'Error testing astrology API: ' + (err instanceof Error ? err.message : String(err)),
+        sender: 'system',
+        timestamp: new Date(),
+      }]);
+    } finally {
       setIsTyping(false);
-      return;
     }
-    setIsTyping(false);
   };
-
 
   // (other hooks or declarations can be here)
 
   return (
     <div className="flex flex-col flex-grow p-6 bg-gradient-to-b from-indigo-50 via-white to-white rounded-2xl shadow-xl border border-indigo-100">
+      {/* Payment scripts */}
+      <Script 
+        src="https://www.paypal.com/sdk/js?client-id=test&currency=USD" 
+        strategy="lazyOnload"
+        onLoad={handlePayPalScriptLoad} 
+      />
+      {disableRazorpay === 0 && (
+        <Script 
+          src="https://checkout.razorpay.com/v1/checkout.js" 
+          strategy="lazyOnload"
+          onLoad={handleRazorpayScriptLoad} 
+        />
+      )}
       <div className="flex items-center mb-4 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
         <span className="text-xl font-semibold text-indigo-700">AIstroGPT Chat</span>
       </div>
-      <div className="flex-1 overflow-y-auto mb-4 space-y-3 rounded-xl p-4 bg-white/80 backdrop-blur-sm border border-indigo-100">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[75%] relative p-3 mb-2 rounded-xl shadow-md transition-all duration-200
-                ${message.sender === 'user'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-800 border border-gray-200'}
-              `}
-            >
-              <span className="absolute top-3 left-[-12px] w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8 border-r-gray-100 hidden md:block" style={{ display: message.sender === 'user' ? 'none' : 'block' }} />
-              <span className="absolute top-3 right-[-12px] w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-l-8 border-l-indigo-600 hidden md:block" style={{ display: message.sender === 'user' ? 'block' : 'none' }} />
-              <p className="text-[16px] leading-relaxed whitespace-pre-line">{message.content}</p>
-              <p className={`text-xs font-medium ${message.sender === 'user' ? 'text-indigo-200' : 'text-gray-600'} mt-1`}>
-                {message.sender === 'user' ? 'You' : message.sender === 'system' ? 'AIstroGPT' : message.sender}
-              </p>
-              <p className={`text-xs mt-2 ${message.sender === 'user' ? 'text-indigo-300' : 'text-gray-500'}`}>
-                {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
+      
+      {!showChatSection && !showPaymentSection ? (
+        // Validation and confirmation UI
+        <div className="flex-1 flex flex-col justify-center items-center">
+          
+          {/* Validation error in red */}
+          {validationError && (
+            <div className="bg-red-50 border border-red-300 text-red-600 p-3 rounded-md w-full max-w-md mb-4">
+              <div className="flex flex-col gap-3">
+                <div>{validationError}</div>
+                <button
+                  onClick={onReturnToDetails}
+                  className="bg-white text-red-600 border border-red-400 rounded-md py-2 px-4 hover:bg-red-50 text-sm font-medium self-end"
+                >
+                  Return to Details
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {!dataConfirmed ? (
+            // Initial validation UI with Set Data button
+            <div className="bg-white/90 p-6 rounded-lg shadow-md w-full max-w-md">
+              <h3 className="font-semibold text-gray-800 mb-4">Validate Your Information</h3>
+              <p className="text-gray-600 mb-4">Please validate your personal details before starting the chat.</p>
+              
+              <button
+                onClick={handleSetDataClick}
+                className="w-full py-2 px-4 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition-colors"
+                disabled={disabled}
+              >
+                Confirm Data
+              </button>
+            </div>
+          ) : (
+            // Confirmation UI
+            <div className="bg-white/90 p-6 rounded-lg shadow-md w-full max-w-md">
+              <h3 className="font-semibold text-gray-800 mb-2">Confirm Your Details</h3>
+              <p className="text-gray-600 mb-4 text-sm">Please review your information before starting the chat.</p>
+              
+              {userDetails && (
+                <div className="bg-gray-50 p-4 rounded-md mb-4">
+                  <div className="grid grid-cols-2 gap-y-2 text-sm">
+                    <div className="font-medium">Email:</div>
+                    <div>{userDetails.email}</div>
+                    
+                    <div className="font-medium">Date of Birth:</div>
+                    <div>{userDetails.dob}</div>
+                    
+                    <div className="font-medium">Time of Birth:</div>
+                    <div>{userDetails.tob}</div>
+                    
+                    <div className="font-medium">Place of Birth:</div>
+                    <div>{userDetails.pob}</div>
+                    
+                    <div className="font-medium">Coordinates:</div>
+                    <div>{userDetails.lat}, {userDetails.lon}</div>
+                    
+                    <div className="font-medium">Timezone:</div>
+                    <div>UTC{userDetails.timezone >= 0 ? '+' : ''}{userDetails.timezone}</div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex justify-between">
+                <button 
+                  onClick={handleCancelConfirm}
+                  className="py-2 px-4 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                >
+                  Back
+                </button>
+                <button 
+                  onClick={handleConfirmData}
+                  className="py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                >
+                  Confirm & Start Chat
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : showPaymentSection ? (
+        // Payment UI
+        <div className="flex-1 flex flex-col justify-center items-center">
+          <div className="bg-white/90 p-6 rounded-lg shadow-md w-full max-w-md">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="font-semibold text-gray-800">Choose Payment Method</h3>
+              <CreditCardIcon className="w-5 h-5 text-indigo-600" />
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-md mb-5">
+              <p className="text-sm text-gray-600 mb-2">Access to AIstroGPT Chat</p>
+              <p className="text-lg font-bold text-indigo-700">$5.00 USD</p>
+              <p className="text-xs text-gray-500 mt-1">One-time payment for 10 minutes of chat access</p>
+            </div>
+            
+            <div className="space-y-3 mb-5">
+              <button 
+                onClick={() => setSelectedPaymentMethod('paypal')}
+                className={`w-full py-3 px-4 border ${selectedPaymentMethod === 'paypal' 
+                  ? 'border-indigo-500 bg-indigo-50' 
+                  : 'border-gray-300'} rounded-md flex items-center justify-between hover:bg-gray-50 transition-colors`}
+              >
+                <span className="font-medium">PayPal</span>
+                <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg" alt="PayPal" className="h-6" />
+              </button>
+              
+              {disableRazorpay === 0 && (
+                <button 
+                  onClick={() => setSelectedPaymentMethod('razorpay')}
+                  className={`w-full py-3 px-4 border ${selectedPaymentMethod === 'razorpay' 
+                    ? 'border-indigo-500 bg-indigo-50' 
+                    : 'border-gray-300'} rounded-md flex items-center justify-between hover:bg-gray-50 transition-colors`}
+                >
+                  <span className="font-medium">Razorpay</span>
+                  <img src="https://razorpay.com/assets/razorpay-glyph.svg" alt="Razorpay" className="h-6" />
+                </button>
+              )}
+              
+              {disableRazorpay === 1 && (
+                <p className="text-xs text-gray-500 text-center">Only PayPal payment is currently supported</p>
+              )}
+            </div>
+            
+            <div className="flex justify-between">
+              <button 
+                onClick={() => setShowPaymentSection(false)}
+                className="py-2 px-4 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+              >
+                Back
+              </button>
+              {selectedPaymentMethod === 'paypal' ? (
+                <div className="w-48">
+                  <div id="paypal-button-container" className="mt-2"></div>
+                  <button
+                    onClick={processPayment}
+                    className="py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors w-full mt-2"
+                  >
+                    Pay with PayPal
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={processPayment}
+                  className={`py-2 px-4 ${selectedPaymentMethod ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-md transition-colors`}
+                  disabled={!selectedPaymentMethod}
+                >
+                  {selectedPaymentMethod ? 'Proceed to Payment' : 'Select Payment Method'}
+                </button>
+              )}
             </div>
           </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      <form onSubmit={handleSubmit} className="flex gap-3 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={isTyping ? 'AIstroGPT is thinking...' : 'Type your message...'}
-          className="flex-1 p-3 bg-white border border-indigo-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
-          disabled={isTyping}
-        />
-        {timerStarted && (
-          <div className="px-4 py-2 bg-indigo-100 text-indigo-800 rounded-lg shadow font-medium text-sm flex items-center">
-            <ClockIcon className="w-4 h-4 mr-1" />
-            {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
+        </div>
+      ) : (
+        <>
+          <div className="flex-1 overflow-y-auto mb-4 space-y-3 rounded-xl p-4 bg-white/80 backdrop-blur-sm border border-indigo-100">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[75%] relative p-3 mb-2 rounded-xl shadow-md transition-all duration-200
+                    ${message.sender === 'user' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-gray-900'}`}
+                >
+                  <div className={`chat-header font-medium ${message.sender === 'user' ? '' : 'text-indigo-700'}`}>
+                    {message.sender === 'user' ? 'You' : 'AIstroGPT'}{' '}
+                    <time className="text-xs opacity-70">
+                      {new Date(message.timestamp).toLocaleTimeString()}
+                    </time>
+                  </div>
+                  <div className={`chat-bubble max-w-md break-words mt-1 ${message.sender === 'user' ? 'chat-bubble-primary text-white' : 'text-gray-800'}`}>
+                    {message.content}
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {isTyping && (
+              <div className="flex justify-start mb-4">
+                <div className="max-w-[75%] relative p-3 mb-2 rounded-xl shadow-md bg-slate-100 text-gray-900">
+                  <div className="chat-header font-medium text-indigo-700">AIstroGPT</div>
+                  <div className="chat-bubble mt-1 text-gray-800">
+                    <span className="typing">...</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </form>
-      <div className="flex justify-center gap-3 mt-4">
-        {apiTest === 1 && (
-          <button
-            className="px-5 py-2 bg-indigo-600 text-white rounded-xl shadow hover:bg-indigo-700 transition-all duration-200 font-medium"
-            onClick={async () => {
-              setIsTyping(true);
-              // Start the countdown timer when Test API button is clicked
-              if (!timerStarted) {
-                setTimerStarted(true);
-              }
-              setMessages((prev) => [...prev, {
-                id: Date.now().toString(),
-                content: 'Sending data to Astro API...',
-                sender: 'user',
-                timestamp: new Date(),
-              }]);
-            try {
-              if (!userDetails) {
-                setIsTyping(false);
-                setMessages((prev) => [...prev, {
-                  id: Date.now().toString(),
-                  content: 'Please set your details in the form before sending.',
-                  sender: 'system',
-                  timestamp: new Date(),
-                }]);
-                return;
-              }
-              const [yearStr, monthStr, dateStr] = userDetails.dob.replace(/-/g, '/').split('/');
-              const [hoursStr, minutesStr] = userDetails.tob.split(':');
-
-              const year = parseInt(yearStr, 10);
-              const month = parseInt(monthStr, 10);
-              const date = parseInt(dateStr, 10);
-              const hours = parseInt(hoursStr, 10);
-              const minutes = parseInt(minutesStr, 10);
-
-              if (isNaN(year) || isNaN(month) || isNaN(date) || isNaN(hours) || isNaN(minutes) || 
-                  String(yearStr).length !== 4 || month < 1 || month > 12 || date < 1 || date > 31 || // Basic validation
-                  hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-                setMessages((prev) => [...prev, {
-                  id: Date.now().toString(),
-                  content: `Error: Invalid Date of Birth or Time of Birth. Please ensure DOB is YYYY/MM/DD and TOB is HH:MM. Received DOB: '${userDetails.dob}', TOB: '${userDetails.tob}'`,
-                  sender: 'system',
-                  timestamp: new Date(),
-                }]);
-                setIsTyping(false);
-                return;
-              }
-
-              const payload = {
-                year,
-                month,
-                date,
-                hours,
-                minutes,
-                latitude: userDetails.lat,
-                longitude: userDetails.lon,
-                timezone: userDetails.timezone,
-              };
-
-                try {
-                  const res = await fetch('/api/astrology', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                  });
-
-                  const data = await res.json();
-                  let reply = '';
-                  let rawApiResponse = ''; // Keep this if you want to log raw response elsewhere
-
-                  if (res.ok) {
-                    reply = 'Astrology API Response:\n' + JSON.stringify(data, null, 2);
-                    rawApiResponse = JSON.stringify(data, null, 2);
-                  } else if (data.error) {
-                    reply = 'Astrology API Error: ' + (data.details || data.error);
-                    rawApiResponse = JSON.stringify(data, null, 2);
-                  } else {
-                    reply = 'Received an unexpected response from Astrology API: ' + JSON.stringify(data, null, 2);
-                    rawApiResponse = JSON.stringify(data, null, 2);
-                  }
-
-                  // If astrology API call was successful, 'reply' contains the astrology data string.
-                  // 'data' here is the JSON object from /api/astrology.
-                  if (res.ok) {
-                    try {
-                      setMessages((prevMessages) => [
-                        ...prevMessages,
-                        {
-                          id: (Date.now() + 2).toString(),
-                          content: 'Sending astrology data to AI Assistant ...',
-                          sender: 'system',
-                          timestamp: new Date(),
-                        },
-                      ]);
-                      // For the test button, let's assume there's no separate 'userQuery' like the main chat input.
-                      // We'll send a generic query or just the astrology data.
-                      // For consistency, let's define a userQuery for the test button scenario.
-                      const testButtonUserQuery = 'Provide insights based on the following astrology data.';
-
-                      const assistantRes = await fetch('/api/assistant', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          astrologyData: data, // 'data' is the JSON object from /api/astrology
-                          userQuery: testButtonUserQuery, 
-                        }),
-                      });
-                      const assistantData = await assistantRes.json();
-                      let assistantResult = '';
-                      if (assistantRes.ok && assistantData.result) {
-                        assistantResult = assistantData.result;
-                      } else if (assistantData.error) {
-                        assistantResult = 'AI Assistant Error (Test Button): ' + assistantData.error;
-                      } else {
-                        assistantResult = 'Unexpected response from AI Assistant (Test Button).';
-                      }
-                      setMessages((prev) => [
-                        ...prev,
-                        {
-                          id: (Date.now() + 3).toString(),
-                          content: assistantResult,
-                          sender: 'system',
-                          timestamp: new Date(),
-                        },
-                      ]);
-                    } catch (err) {
-                      console.error('Error calling /api/assistant (Test Button):', err);
-                      setMessages((prev) => [...prev, {
-                        id: (Date.now() + 4).toString(),
-                        content: 'Sorry, there was a problem communicating with the AI Assistant (Test Button). ' + (err instanceof Error ? err.message : ''),
-                        sender: 'system',
-                        timestamp: new Date(),
-                      }]);
-                    }
-                  } else {
-                     // If astrology API call itself failed, the error message is already in 'reply'
-                     // and will be displayed by the existing logic.
-                     setMessages((prev) => [...prev, {
-                      id: (Date.now() + 1).toString(), // Ensure unique ID
-                      content: reply, // This already contains the error from astrology API
-                      sender: 'system',
-                      timestamp: new Date(),
-                    }]);
-                    console.log('Skipping Assistant API call (Test Button) due to Astrology API error.');
-                  }
-                } catch (err) {
-                  console.error('Error during astrology API call:', err);
-                  setMessages((prev) => [...prev, {
-                    id: (Date.now() + 5).toString(),
-                    content: 'Error fetching astrology data: ' + (err instanceof Error ? err.message : String(err)),
-                    sender: 'system',
-                    timestamp: new Date(),
-                  }]);
-                }
-              setIsTyping(false);
-            } catch (err) {
-              console.error('Test button error:', err);
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: (Date.now() + 4).toString(),
-                  content: '[Test API] An unexpected error occurred: ' + (err instanceof Error ? err.message : String(err)),
-                  sender: 'system',
-                  timestamp: new Date(),
-                },
-              ]);
-              setIsTyping(false);
-            }
-          }}
-        >
-          Test Astro API
-        </button>
+          <div ref={messagesEndRef} />
+          
+          {/* Chat input form */}
+          <form onSubmit={handleSubmit} className="flex items-center gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
+              placeholder={isTyping ? 'AIstroGPT is thinking...' : 'Type your message... (press Enter to send)'}
+              className="flex-1 p-3 bg-white border border-indigo-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+              disabled={isTyping}
+            />
+          </form>
+          
+          {/* Footer with other controls */}
+          <div className="flex items-center justify-between mt-4">
+            {apiTest === 1 && (
+              <button
+                onClick={handleTestAstroApi}
+                className="px-4 py-2 bg-amber-500 text-white rounded-lg shadow hover:bg-amber-600 transition-all duration-200 font-medium text-sm"
+                disabled={isTyping}
+              >
+                Test API
+              </button>
+            )}
+            <button
+              onClick={onEndChat}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg shadow hover:bg-red-700 transition-all duration-200 font-medium text-sm flex items-center"
+            >
+              <XMarkIcon className="w-4 h-4 mr-1" />
+              End Chat
+            </button>
+          </div>
+        </>
       )}
-        <button
-          onClick={onEndChat}
-          className="px-4 py-2 bg-red-600 text-white rounded-lg shadow hover:bg-red-700 transition-all duration-200 font-medium text-sm flex items-center"
-        >
-          <XMarkIcon className="w-4 h-4 mr-1" />
-          End Chat
-        </button>
-      </div>
     </div>
   );
 }
