@@ -23,9 +23,9 @@ export const initializeRazorpayCheckout = (
         throw new Error('Razorpay SDK not loaded or blocked by browser extension');
       }
 
-      // Use fixed amount of 400 INR as requested
+      // Use fixed amount of 429 INR as requested
       // Note: Razorpay expects amount in paise (1 INR = 100 paise)
-      const displayAmount = 40000; // 400 INR in paise
+      const displayAmount = 42900; // 429 INR in paise
       
       // For testing, we don't need to generate an order ID - Razorpay will generate one for us
       // In production, order ID should come from your backend
@@ -46,8 +46,7 @@ export const initializeRazorpayCheckout = (
             // For development: Skip server verification and consider the payment successful
             // In production, this should verify the payment signature with your backend
             const isDev = process.env.NODE_ENV !== 'production' || 
-                        !process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 
-                        razorpayKeyId === 'rzp_test_ouCfPyiBhQCVMO';
+                        !process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
             
             if (isDev) {
               console.log('Development mode: Skipping Razorpay payment verification');
