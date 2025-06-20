@@ -139,7 +139,7 @@ const validateUserDetails = (details: UserDetails | undefined): ValidationResult
 
 interface ChatProps {
   onEndChat: () => void;
-  onReturnToDetails: () => void; // Required callback to return to details form when validation fails
+  onReturnToDetails?: () => void; // Made optional
   userDetails?: UserDetails;
   disabled?: boolean;
 }
@@ -245,7 +245,9 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
     if (!userDetails) {
       setValidationError('User details are not available.');
       // Return to details form when validation fails
-      onReturnToDetails();
+      if (onReturnToDetails) {
+        onReturnToDetails();
+      }
       return false;
     }
     
@@ -253,7 +255,9 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
     if (!validation.isValid) {
       setValidationError(validation.errorMessage || 'Invalid user details.');
       // Return to details form when validation fails
-      onReturnToDetails();
+      if (onReturnToDetails) {
+        onReturnToDetails();
+      }
       return false;
     }
     
@@ -269,8 +273,10 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
     } else {
       // Reset confirmation status if validation fails
       setDataConfirmed(false);
-      // Return to details form for editing
-      onReturnToDetails();
+      // Return to details form for editing if the callback is provided
+      if (onReturnToDetails) {
+        onReturnToDetails();
+      }
     }
   };
 
@@ -279,10 +285,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
     if (skipPayment === 0) {
       // Skip payment and go directly to chat
       setShowChatSection(true);
-      // Start the timer when user confirms data and enters chat
-      if (!timerStarted) {
-        setTimerStarted(true);
-      }
+      // Timer will start when user sends first message
     } else {
       // Show payment options
       setShowPaymentSection(true);
@@ -302,10 +305,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
     setPaymentCompleted(true);
     setShowPaymentSection(false);
     setShowChatSection(true);
-    // Start the timer when user completes payment and enters chat
-    if (!timerStarted) {
-      setTimerStarted(true);
-    }
+    // Timer will start when user sends first message
   };
   
   // Handle payment error
@@ -437,7 +437,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
 
     if (!chatStarted) {
       setChatStarted(true);
-      // Start countdown timer when chat starts
+      // Start countdown timer when user sends their first message
       setTimerStarted(true);
     }
 
@@ -794,10 +794,10 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       )}
       <div className="flex items-center justify-between mb-4 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
         <span className="text-xl font-semibold text-indigo-700">AIstroGPT Chat</span>
-        {timerStarted && (
+        {showChatSection && (
           <div className="flex items-center text-sm font-medium text-gray-600">
             <ClockIcon className="w-5 h-5 mr-1.5 text-indigo-500" />
-            <span>Time Remaining: {Math.floor(countdown / 60)}:{('0' + (countdown % 60)).slice(-2)}</span>
+            <span>Time Remaining: {timerStarted ? `${Math.floor(countdown / 60)}:${('0' + (countdown % 60)).slice(-2)}` : '10:00'}</span>
           </div>
         )}
       </div>
