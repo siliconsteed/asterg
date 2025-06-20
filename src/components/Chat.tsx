@@ -139,7 +139,7 @@ const validateUserDetails = (details: UserDetails | undefined): ValidationResult
 
 interface ChatProps {
   onEndChat: () => void;
-  onReturnToDetails?: () => void; // Made optional
+  onReturnToDetails?: () => void;
   userDetails?: UserDetails;
   disabled?: boolean;
 }
@@ -245,9 +245,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
     if (!userDetails) {
       setValidationError('User details are not available.');
       // Return to details form when validation fails
-      if (onReturnToDetails) {
-        onReturnToDetails();
-      }
+      onReturnToDetails?.();
       return false;
     }
     
@@ -255,9 +253,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
     if (!validation.isValid) {
       setValidationError(validation.errorMessage || 'Invalid user details.');
       // Return to details form when validation fails
-      if (onReturnToDetails) {
-        onReturnToDetails();
-      }
+      onReturnToDetails?.();
       return false;
     }
     
@@ -274,9 +270,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       // Reset confirmation status if validation fails
       setDataConfirmed(false);
       // Return to details form for editing if the callback is provided
-      if (onReturnToDetails) {
-        onReturnToDetails();
-      }
+      onReturnToDetails?.();
     }
   };
 
@@ -396,8 +390,8 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
   // Handle user cancellation of data confirmation
   const handleCancelConfirm = () => {
     setDataConfirmed(false);
-    // Return to details form for editing
-    onReturnToDetails();
+    // Return to details form for editing if the callback is provided
+    onReturnToDetails?.();
   };
 
   // Restore astroData and threadId from localStorage on mount
