@@ -7,6 +7,13 @@ import Script from 'next/script';
 import { initializePayPalButton } from '@/lib/paypalClient';
 import { initializeRazorpayCheckout } from '@/lib/razorpayClient';
 
+// Add TypeScript declaration for global Razorpay object
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
 const responses = [
   'the stars indicate a period of growth and opportunity ahead.',
   'your ruling planet suggests focusing on personal relationships.',
@@ -138,15 +145,54 @@ interface ChatProps {
 }
 
 // Set to 0 to bypass payment flow, 1 to show payment options
-const skipPayment: number = 0; // When 0, payment step is skipped
+const skipPayment: number = 1; // When 0, payment step is skipped
 
 // Set to 1 to disable Razorpay, 0 to enable it
-const disableRazorpay: number = 1; // When 1, Razorpay payment option is disabled
+const disableRazorpay: number = 0; // When 1, Razorpay payment option is disabled
 
 export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabled }: ChatProps) {
-  // PayPal script loading state
+  // Payment script loading states
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Loading state for payment processing
+  
+  // PayPal script loading handler
+  const handlePayPalScriptLoad = () => {
+    setPaypalLoaded(true);
+    console.log('PayPal script loaded');
+  };
+  
+  // Razorpay script loading handler
+  const handleRazorpayScriptLoad = () => {
+    // Double check that Razorpay is actually available
+    if (typeof window !== 'undefined' && window.Razorpay) {
+      setRazorpayLoaded(true);
+      console.log('Razorpay script loaded successfully');
+    } else {
+      console.warn('Razorpay script loaded event fired but window.Razorpay is not available. Possible ad blocker interference.');
+      setRazorpayLoaded(false);
+    }
+  };
+  
+  // Check periodically if Razorpay is available despite script loading issues
+  useEffect(() => {
+    // If already loaded, no need to check
+    if (razorpayLoaded) return;
+    
+    const checkRazorpay = () => {
+      if (typeof window !== 'undefined' && window.Razorpay) {
+        setRazorpayLoaded(true);
+        console.log('Razorpay detected through periodic check');
+      }
+    };
+    
+    // Check immediately and then every 2 seconds
+    checkRazorpay();
+    const interval = setInterval(checkRazorpay, 2000);
+    
+    return () => clearInterval(interval);
+  }, [razorpayLoaded]);
+
   // State for validation errors and data confirmation
   const [validationError, setValidationError] = useState<string | null>(null);
   const [dataConfirmed, setDataConfirmed] = useState(false);
@@ -262,7 +308,25 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
   // Handle payment error
   const handlePaymentError = (error: any) => {
     console.error('Payment error:', error);
-    alert('There was an error processing your payment. Please try again.');
+    
+    // Get a more specific error message if available
+    let errorMessage = 'There was an error processing your payment.';
+    
+    if (error instanceof Error) {
+      errorMessage = `Payment failed: ${error.message}`;
+      console.debug('Error details:', error);
+    } else if (typeof error === 'string') {
+      errorMessage = `Payment failed: ${error}`;
+    } else if (error && typeof error === 'object') {
+      errorMessage = error.description || error.message || errorMessage;
+      console.debug('Error object:', JSON.stringify(error));
+    }
+    
+    // Reset payment UI state
+    setIsLoading(false);
+    
+    // Show error to user
+    alert(errorMessage + ' Please try again or choose a different payment method.');
   };
   
   // Process payment based on selected payment method
@@ -275,18 +339,43 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         handlePaymentComplete,
         handlePaymentError
       );
-    } else if (selectedPaymentMethod === 'razorpay' && razorpayLoaded && disableRazorpay === 0) {
+    } else if (selectedPaymentMethod === 'razorpay' && disableRazorpay === 0) {
+      // Check if Razorpay is properly loaded
+      if (!window.Razorpay) {
+        console.error('Razorpay not available. Ensure the script is loaded.');
+        alert('Razorpay payment service is not available right now. Please try PayPal or try again later.');
+        return;
+      }
+      
+      // Show loading indicator
+      setIsLoading(true);
+      
       // Launch Razorpay checkout with user details if available
-      initializeRazorpayCheckout(
-        5.00, // $5 USD
-        'USD',
-        handlePaymentComplete,
-        handlePaymentError,
-        userDetails ? { 
-          email: userDetails.email,
-          // You could add name and phone if you collect those
-        } : undefined
-      );
+      try {
+        console.log('Initializing Razorpay checkout with 400 INR...');
+        initializeRazorpayCheckout(
+          400, // 400 INR
+          'INR',
+          (response) => {
+            console.log('Razorpay payment successful', response);
+            setIsLoading(false);
+            handlePaymentComplete(response);
+          },
+          (error) => {
+            console.error('Razorpay payment error:', error);
+            setIsLoading(false);
+            handlePaymentError(error);
+          },
+          userDetails ? { 
+            email: userDetails.email,
+            name: userDetails.email.split('@')[0], // Use part of email as name
+            // You could add phone if you collect it
+          } : undefined
+        );
+      } catch (error) {
+        console.error('Error initializing Razorpay:', error);
+        handlePaymentError(error);
+      }
     } else {
       // Fallback for development/testing without payment SDKs
       alert('Processing payment with ' + selectedPaymentMethod);
@@ -299,16 +388,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
   
   
   
-  // Handle script load events
-  const handlePayPalScriptLoad = () => {
-    setPaypalLoaded(true);
-    console.log('PayPal script loaded');
-  };
-  
-  const handleRazorpayScriptLoad = () => {
-    setRazorpayLoaded(true);
-    console.log('Razorpay script loaded');
-  };
+  // Additional methods and handlers for chat functionality continue below...
 
   // Handle user cancellation of data confirmation
   const handleCancelConfirm = () => {
@@ -699,8 +779,12 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       {disableRazorpay === 0 && (
         <Script 
           src="https://checkout.razorpay.com/v1/checkout.js" 
-          strategy="lazyOnload"
-          onLoad={handleRazorpayScriptLoad} 
+          strategy="afterInteractive" 
+          onLoad={handleRazorpayScriptLoad}
+          onError={() => {
+            console.error('Failed to load Razorpay script');
+            setRazorpayLoaded(false);
+          }} 
         />
       )}
       <div className="flex items-center justify-between mb-4 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
@@ -820,15 +904,18 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
               </button>
               
               {disableRazorpay === 0 && (
-                <button 
-                  onClick={() => setSelectedPaymentMethod('razorpay')}
-                  className={`w-full py-3 px-4 border ${selectedPaymentMethod === 'razorpay' 
-                    ? 'border-indigo-500 bg-indigo-50' 
-                    : 'border-gray-300'} rounded-md flex items-center justify-between hover:bg-gray-50 transition-colors`}
-                >
-                  <span className="font-medium">Razorpay</span>
-                  <img src="https://razorpay.com/assets/razorpay-glyph.svg" alt="Razorpay" className="h-6" />
-                </button>
+                <div>
+                  <button 
+                    onClick={() => setSelectedPaymentMethod('razorpay')}
+                    className={`w-full py-3 px-4 border ${selectedPaymentMethod === 'razorpay' 
+                      ? 'border-indigo-500 bg-indigo-50' 
+                      : 'border-gray-300'} rounded-md flex items-center justify-between hover:bg-gray-50 transition-colors`}
+                  >
+                    <span className="font-medium">Razorpay</span>
+                    <img src="https://razorpay.com/assets/razorpay-glyph.svg" alt="Razorpay" className="h-6" />
+                  </button>
+                  <p className="text-xs text-gray-500 mt-1 text-right">Razorpay for India</p>
+                </div>
               )}
             </div>
             
@@ -851,11 +938,22 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                 </div>
               ) : (
                 <button 
-                  onClick={processPayment}
-                  className={`py-2 px-4 ${selectedPaymentMethod ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-md transition-colors`}
-                  disabled={!selectedPaymentMethod}
+                  onClick={() => {
+                    // Handle fallback if user somehow selects an invalid payment method
+                    if (!selectedPaymentMethod) {
+                      alert('Please select a valid payment method');
+                      return;
+                    }
+                    
+                    // Disable the button while processing payment
+                    if (isLoading) return;
+                    
+                    processPayment();
+                  }}
+                  className={`py-2 px-4 ${selectedPaymentMethod ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-md transition-colors ${isLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+                  disabled={isLoading}
                 >
-                  {selectedPaymentMethod ? 'Proceed to Payment' : 'Select Payment Method'}
+                  {isLoading ? 'Processing...' : selectedPaymentMethod ? 'Proceed to Payment' : 'Select Payment Method'}
                 </button>
               )}
             </div>
