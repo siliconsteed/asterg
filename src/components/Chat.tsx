@@ -150,6 +150,9 @@ const skipPayment: number = 1; // When 0, payment step is skipped
 // Set to 1 to disable Razorpay, 0 to enable it
 const disableRazorpay: number = 0; // When 1, Razorpay payment option is disabled
 
+// Set to 1 to disable PayPal, 0 to enable it
+const disablePaypal: number = 0; // When 1, PayPal payment option is disabled
+
 export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabled }: ChatProps) {
   // Payment script loading states
   const [paypalLoaded, setPaypalLoaded] = useState(false);
@@ -331,7 +334,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
   
   // Process payment based on selected payment method
   const processPayment = () => {
-    if (selectedPaymentMethod === 'paypal' && paypalLoaded) {
+    if (selectedPaymentMethod === 'paypal' && paypalLoaded && disablePaypal === 0) {
       // Render PayPal button in the paypal-button-container
       initializePayPalButton(
         'paypal-button-container', 
@@ -770,12 +773,14 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
 
   return (
     <div className="flex flex-col flex-grow p-6 bg-gradient-to-b from-indigo-50 via-white to-white rounded-2xl shadow-xl border border-indigo-100">
-      {/* Payment scripts */}
-      <Script 
-        src="https://www.paypal.com/sdk/js?client-id=test&currency=USD" 
-        strategy="lazyOnload"
-        onLoad={handlePayPalScriptLoad} 
-      />
+      {/* Dynamic loading of payment scripts */}
+      {disablePaypal === 0 && (
+        <Script
+          src="https://www.paypal.com/sdk/js?client-id=test&currency=USD"
+          onLoad={handlePayPalScriptLoad}
+          onError={() => console.error('Failed to load PayPal script')}
+        />
+      )}
       {disableRazorpay === 0 && (
         <Script 
           src="https://checkout.razorpay.com/v1/checkout.js" 
@@ -893,15 +898,17 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
             </div>
             
             <div className="space-y-3 mb-5">
-              <button 
-                onClick={() => setSelectedPaymentMethod('paypal')}
-                className={`w-full py-3 px-4 border ${selectedPaymentMethod === 'paypal' 
-                  ? 'border-indigo-500 bg-indigo-50' 
-                  : 'border-gray-300'} rounded-md flex items-center justify-between hover:bg-gray-50 transition-colors`}
-              >
-                <span className="font-medium">PayPal</span>
-                <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg" alt="PayPal" className="h-6" />
-              </button>
+              {disablePaypal === 0 && (
+                <button 
+                  onClick={() => setSelectedPaymentMethod('paypal')}
+                  className={`w-full py-3 px-4 border ${selectedPaymentMethod === 'paypal' 
+                    ? 'border-indigo-500 bg-indigo-50' 
+                    : 'border-gray-300'} rounded-md flex items-center justify-between hover:bg-gray-50 transition-colors`}
+                >
+                  <span className="font-medium">PayPal</span>
+                  <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg" alt="PayPal" className="h-6" />
+                </button>
+              )}
               
               {disableRazorpay === 0 && (
                 <div>

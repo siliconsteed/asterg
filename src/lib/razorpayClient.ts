@@ -30,17 +30,8 @@ export const initializeRazorpayCheckout = (
       // For testing, we don't need to generate an order ID - Razorpay will generate one for us
       // In production, order ID should come from your backend
 
-      // Debugging - log if env vars are loaded (only in development)
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('ENV check - NEXT_PUBLIC_RAZORPAY_KEY_ID available:', !!process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID);
-      }
-
-      // Check if Razorpay key is available and provide fallback for development
-      const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_ouCfPyiBhQCVMO';
-        
-      if (!razorpayKeyId || razorpayKeyId === 'rzp_test_ouCfPyiBhQCVMO') {
-        console.warn('Using fallback Razorpay test key. Ensure NEXT_PUBLIC_RAZORPAY_KEY_ID is set in .env.local');
-      }
+      // Use Razorpay key from environment variables
+      const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
       
       const options = {
         key: razorpayKeyId, // Razorpay Key ID from environment
