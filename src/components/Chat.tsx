@@ -137,9 +137,6 @@ interface ChatProps {
   disabled?: boolean;
 }
 
-// Set to 1 to show the Test Astro API button
-const apiTest = 1; // Only used for the lower button beside End Chat
-
 // Set to 0 to bypass payment flow, 1 to show payment options
 const skipPayment: number = 0; // When 0, payment step is skipped
 
@@ -592,7 +589,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       // Show a message that astrology data is being fetched
       setMessages((prev) => [...prev, {
         id: Date.now().toString(),
-        content: 'Testing astrology API. Fetching astrological insights...',
+        content: 'Fetching astrological insights...',
         sender: 'system',
         timestamp: new Date(),
       }]);
@@ -634,7 +631,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       // Display confirmation that astrology data was fetched
       const astroConfirmationMsg = {
         id: Date.now().toString(),
-        content: 'Astrology data fetched successfully. Testing AI Assistant with the astrology data...',
+        content: 'Astrology data fetched successfully. AIstroGPT with the astrology data...',
         sender: 'system' as 'system',
         timestamp: new Date(),
       };
@@ -706,8 +703,14 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
           onLoad={handleRazorpayScriptLoad} 
         />
       )}
-      <div className="flex items-center mb-4 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
+      <div className="flex items-center justify-between mb-4 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
         <span className="text-xl font-semibold text-indigo-700">AIstroGPT Chat</span>
+        {timerStarted && (
+          <div className="flex items-center text-sm font-medium text-gray-600">
+            <ClockIcon className="w-5 h-5 mr-1.5 text-indigo-500" />
+            <span>Time Remaining: {Math.floor(countdown / 60)}:{('0' + (countdown % 60)).slice(-2)}</span>
+          </div>
+        )}
       </div>
       
       {!showChatSection && !showPaymentSection ? (
@@ -827,10 +830,6 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                   <img src="https://razorpay.com/assets/razorpay-glyph.svg" alt="Razorpay" className="h-6" />
                 </button>
               )}
-              
-              {disableRazorpay === 1 && (
-                <p className="text-xs text-gray-500 text-center">Only PayPal payment is currently supported</p>
-              )}
             </div>
             
             <div className="flex justify-between">
@@ -914,13 +913,13 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
           
           {/* Footer with other controls */}
           <div className="flex items-center justify-between mt-4">
-            {apiTest === 1 && (
+            { (
               <button
                 onClick={handleTestAstroApi}
-                className="px-4 py-2 bg-amber-500 text-white rounded-lg shadow hover:bg-amber-600 transition-all duration-200 font-medium text-sm"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700 transition-all duration-200 font-medium text-sm"
                 disabled={isTyping}
               >
-                Test API
+                Start/Send
               </button>
             )}
             <button
