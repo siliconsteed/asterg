@@ -33,22 +33,34 @@ export default function Hero() {
 
 
   return (
-    <div className="relative overflow-hidden bg-coffee-50 py-16 sm:py-24">
-      <div className="absolute inset-y-0 w-full h-full">
+    <div className="relative overflow-hidden bg-coffee-50 py-8 sm:py-12 min-h-[80vh] flex items-center">
+      <div className="absolute inset-0 w-full h-full">
         <div className="absolute inset-0 bg-[url('/stars.svg')] opacity-10"></div>
-        <div className="absolute bottom-0 h-80 w-full bg-gradient-to-t from-coffee-50 to-transparent"></div>
+        <div className="absolute bottom-0 h-full w-full bg-gradient-to-t from-coffee-50 to-transparent"></div>
       </div>
       
       <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-dark sm:text-6xl">
+          {/* Prominent Logo Display */}
+          <div className="mb-4 flex justify-center">
+            <div className="relative rounded-full p-2 bg-white bg-opacity-20 backdrop-blur-sm shadow-lg ring-1 ring-coffee-200">
+              <img
+                src="/assets/sundial.jpg"
+                alt="Aistrogpt Logo"
+                className="h-20 w-20 object-cover rounded-full"
+                width={80}
+                height={80}
+              />
+            </div>
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-dark sm:text-5xl">
             Your Personal
             <span className="block text-coffee-300">Astrology Guide</span>
           </h1>
-          <p className="mt-6 text-lg leading-8 text-gray-600">
-            Unlock the secrets of the stars and discover your cosmic path. Get personalized astrological insights powered by advanced AI technology.
+          <p className="mt-4 text-base leading-6 text-gray-600">
+            Unlock the secrets of the stars and discover your cosmic path.
           </p>
-          <div className="mt-10 flex items-center justify-center gap-x-6">
+          <div className="mt-6 flex items-center justify-center gap-x-6">
             <div className="relative group cursor-pointer">
               <div className="absolute -inset-0.5 bg-gradient-to-r from-coffee-200 to-coffee-400 rounded-lg blur opacity-50 group-hover:opacity-75 transition duration-200"></div>
               <button
