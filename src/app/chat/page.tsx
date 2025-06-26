@@ -11,6 +11,11 @@ export default function ChatPage() {
   const [userDetails, setUserDetails] = useState<any>(null);
   const [detailsSet, setDetailsSet] = useState(false);
   const router = useRouter();
+  
+  // Function to handle returning to details form when validation fails
+  const handleReturnToDetails = () => {
+    setDetailsSet(false);
+  };
 
   const handleEndChat = () => {
     router.push('/');
@@ -64,7 +69,12 @@ export default function ChatPage() {
         <div className="flex flex-col gap-8 justify-center items-center">
           <UserDetailsForm onSetData={handleSetData} disabled={detailsSet} />
           <div className="flex-1 min-w-[400px]">
-            <Chat onEndChat={handleEndChat} userDetails={userDetails} disabled={!detailsSet} />
+            <Chat 
+              onEndChat={handleEndChat} 
+              onReturnToDetails={handleReturnToDetails}
+              userDetails={userDetails} 
+              disabled={!detailsSet} 
+            />
           </div>
         </div>
       </div>
