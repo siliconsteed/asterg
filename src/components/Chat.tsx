@@ -145,7 +145,7 @@ interface ChatProps {
 }
 
 // Set to 0 to bypass payment flow, 1 to show payment options
-const skipPayment: number = 0; // When 0, payment step is skipped
+const skipPayment: number = 1; // When 0, payment step is skipped
 
 // Set to 1 to disable Razorpay, 0 to enable it
 const disableRazorpay: number = 0; // When 1, Razorpay payment option is disabled
@@ -887,7 +887,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
             
             <div className="bg-gray-50 p-4 rounded-md mb-5">
               <p className="text-sm text-gray-600 mb-2">Access to AIstroGPT Chat</p>
-              <p className="text-lg font-bold text-indigo-700">₹429 INR</p>
+              <p className="text-lg font-bold text-indigo-700"> 5 USD</p>
               <p className="text-xs text-gray-500 mt-1">One-time payment for 10 minutes of chat access</p>
             </div>
             
@@ -915,7 +915,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                     <span className="font-medium">Razorpay</span>
                     <img src="https://razorpay.com/assets/razorpay-glyph.svg" alt="Razorpay" className="h-6" />
                   </button>
-                  <p className="text-xs text-gray-500 mt-1 text-right">Razorpay for India</p>
+                  <p className="text-xs text-gray-700 font-normal mt-1 text-left">Razorpay for India</p>
                 </div>
               )}
             </div>
