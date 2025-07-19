@@ -25,19 +25,24 @@ export default function ChatPage() {
     console.log('--- MARKER 1: handleSetData triggered ---');
     console.log('Received details object:', details);
 
-    setUserDetails(details);
+    const correctedDetails = {
+      ...details,
+      timezone: parseFloat(details.timezone)
+    };
+
+    setUserDetails(correctedDetails);
     setDetailsSet(true);
 
     // ---- Send user details to Supabase ----
     try {
       const dataToInsert = {
-        username: details.email,
-        dob: details.dob,
-        tob: details.tob,
-        pob: details.pob,
-        lat: Math.round(details.lat),
-        long: Math.round(details.lon),
-        timezone: String(details.timezone),
+        username: correctedDetails.email,
+        dob: correctedDetails.dob,
+        tob: correctedDetails.tob,
+        pob: correctedDetails.pob,
+        lat: Math.round(correctedDetails.lat),
+        long: Math.round(correctedDetails.lon),
+        timezone: correctedDetails.timezone,
       };
 
       console.log('--- MARKER 2: Attempting to insert the following data into Supabase ---');
