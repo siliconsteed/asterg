@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import ChatHistory from '@/components/ChatHistory';
 import Chat from '@/components/Chat';
 
 import { useEffect } from 'react';
@@ -48,10 +47,6 @@ return (
                 New Chat
               </a>
             </div>
-            <ChatHistory 
-              userId={user._id} 
-              onSelectSession={(sessionId) => setSelectedSessionId(sessionId)}
-            />
           </div>
 
           <div className="lg:col-span-2">

@@ -442,8 +442,22 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       timestamp: new Date(),
     };
     // Store current input *before* clearing and adding user message to UI
-    const currentInput = input; 
+    const currentInput = input;
     setMessages((prev) => [...prev, { ...userMessage, content: currentInput }]); // Use currentInput for UI
+
+    // Send the message to the Supabase backend
+    try {
+      fetch('/api/sendMessage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ msg: currentInput }),
+      });
+    } catch (error) {
+      console.error('Failed to send message to Supabase:', error);
+    }
+
     setInput('');
     setIsTyping(true);
     
@@ -1004,9 +1018,9 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
               type="text"
               value={input}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
-              placeholder={isTyping ? 'AIstroGPT is thinking...' : 'Type your message... (press Enter to send)'}
+              placeholder={!chatStarted ? 'Click Start/Send to begin...' : (isTyping ? 'AIstroGPT is thinking...' : 'Type your message...')}
               className="flex-1 p-3 bg-white border border-indigo-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
-              disabled={isTyping}
+              disabled={isTyping || !chatStarted}
             />
           </form>
           
@@ -1014,7 +1028,12 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
           <div className="flex items-center justify-between mt-4">
             { (
               <button
-                onClick={handleTestAstroApi}
+                onClick={() => {
+                  if (!chatStarted) {
+                    setChatStarted(true);
+                  }
+                  handleTestAstroApi();
+                }}
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700 transition-all duration-200 font-medium text-sm"
                 disabled={isTyping}
               >
