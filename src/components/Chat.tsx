@@ -145,7 +145,7 @@ interface ChatProps {
 }
 
 // Set to 0 to bypass payment flow, 1 to show payment options
-const skipPayment: number = 1; // When 0, payment step is skipped
+const skipPayment: number = 0; // When 0, payment step is skipped
 
 // Set to 1 to disable Razorpay, 0 to enable it
 const disableRazorpay: number = 0; // When 1, Razorpay payment option is disabled
