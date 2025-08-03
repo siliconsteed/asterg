@@ -780,7 +780,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
   // (other hooks or declarations can be here)
 
   return (
-    <div className="flex flex-col flex-grow p-6 bg-gradient-to-b from-indigo-50 via-white to-white rounded-2xl shadow-xl border border-indigo-100">
+    <div className="flex flex-col flex-grow p-3 sm:p-6 glass rounded-2xl shadow-2xl border border-white/20">
       {/* Dynamic loading of payment scripts */}
       {disablePaypal === 0 && (
         <Script
@@ -800,12 +800,12 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
           }} 
         />
       )}
-      <div className="flex items-center justify-between mb-4 p-4 bg-white/80 backdrop-blur-sm border border-indigo-100 rounded-xl shadow-sm">
-        <span className="text-xl font-semibold text-indigo-700">AIstroGPT Chat</span>
+      <div className="flex items-center justify-between mb-3 sm:mb-4 p-3 sm:p-4 bg-white/90 backdrop-blur-sm border border-white/20 rounded-xl shadow-sm">
+        <span className="text-lg sm:text-xl font-semibold text-coffee-700">AIstroGPT Chat</span>
         {showChatSection && (
-          <div className="flex items-center text-sm font-medium text-gray-600">
-            <ClockIcon className="w-5 h-5 mr-1.5 text-indigo-500" />
-            <span>Time Remaining: {timerStarted ? `${Math.floor(countdown / 60)}:${('0' + (countdown % 60)).slice(-2)}` : '10:00'}</span>
+          <div className="flex items-center text-xs sm:text-sm font-medium text-gray-600">
+            <ClockIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-1.5 text-coffee-500" />
+            <span>Time: {timerStarted ? `${Math.floor(countdown / 60)}:${('0' + (countdown % 60)).slice(-2)}` : '10:00'}</span>
           </div>
         )}
       </div>
@@ -831,27 +831,27 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
           
           {!dataConfirmed ? (
             // Initial validation UI with Set Data button
-            <div className="bg-white/90 p-6 rounded-lg shadow-md w-full max-w-md">
-              <h3 className="font-semibold text-gray-800 mb-4">Validate Your Information</h3>
-              <p className="text-gray-600 mb-4">Please validate your personal details before starting the chat.</p>
-              
-              <button
-                onClick={handleSetDataClick}
-                className="w-full py-2 px-4 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition-colors"
-                disabled={disabled}
-              >
-                Confirm Data
-              </button>
+                      <div className="bg-white/90 p-4 sm:p-6 rounded-xl shadow-md w-full max-w-md">
+            <h3 className="font-semibold text-gray-800 mb-3 sm:mb-4 text-sm sm:text-base">Validate Your Information</h3>
+            <p className="text-gray-600 mb-3 sm:mb-4 text-xs sm:text-sm">Please validate your personal details before starting the chat.</p>
+            
+            <button
+              onClick={handleSetDataClick}
+              className="w-full py-2.5 sm:py-3 px-4 sm:px-6 bg-gradient-to-r from-coffee-400 to-purple-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 btn-hover text-sm sm:text-base"
+              disabled={disabled}
+            >
+              Confirm Data
+            </button>
             </div>
           ) : (
             // Confirmation UI
-            <div className="bg-white/90 p-6 rounded-lg shadow-md w-full max-w-md">
-              <h3 className="font-semibold text-gray-800 mb-2">Confirm Your Details</h3>
-              <p className="text-gray-600 mb-4 text-sm">Please review your information before starting the chat.</p>
+            <div className="bg-white/90 p-4 sm:p-6 rounded-xl shadow-md w-full max-w-md">
+              <h3 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">Confirm Your Details</h3>
+              <p className="text-gray-600 mb-3 sm:mb-4 text-xs sm:text-sm">Please review your information before starting the chat.</p>
               
               {userDetails && (
-                <div className="bg-gray-50 p-4 rounded-md mb-4">
-                  <div className="grid grid-cols-2 gap-y-2 text-sm">
+                <div className="bg-gray-50 p-3 sm:p-4 rounded-xl mb-3 sm:mb-4">
+                  <div className="grid grid-cols-2 gap-y-1 sm:gap-y-2 text-xs sm:text-sm">
                     <div className="font-medium">Email:</div>
                     <div>{userDetails.email}</div>
                     
@@ -873,18 +873,18 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                 </div>
               )}
               
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-2">
                 <button 
                   onClick={handleCancelConfirm}
-                  className="py-2 px-4 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                  className="py-2 px-3 sm:px-4 bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300 transition-colors text-xs sm:text-sm"
                 >
                   Back
                 </button>
                 <button 
                   onClick={handleConfirmData}
-                  className="py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                  className="py-2 px-3 sm:px-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-105 text-xs sm:text-sm"
                 >
-                  Confirm & Start Chat
+                  Confirm & Start
                 </button>
               </div>
             </div>
@@ -893,15 +893,15 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       ) : showPaymentSection ? (
         // Payment UI
         <div className="flex-1 flex flex-col justify-center items-center">
-          <div className="bg-white/90 p-6 rounded-lg shadow-md w-full max-w-md">
+          <div className="bg-white/90 p-6 rounded-xl shadow-md w-full max-w-md">
             <div className="flex justify-between items-center mb-5">
               <h3 className="font-semibold text-gray-800">Choose Payment Method</h3>
-              <CreditCardIcon className="w-5 h-5 text-indigo-600" />
+              <CreditCardIcon className="w-5 h-5 text-coffee-600" />
             </div>
             
-            <div className="bg-gray-50 p-4 rounded-md mb-5">
+            <div className="bg-gray-50 p-4 rounded-xl mb-5">
               <p className="text-sm text-gray-600 mb-2">Access to AIstroGPT Chat</p>
-              <p className="text-lg font-bold text-indigo-700"> 5 USD</p>
+              <p className="text-lg font-bold text-coffee-700"> 5 USD</p>
               <p className="text-xs text-gray-500 mt-1">One-time payment for 10 minutes of chat access</p>
             </div>
             
@@ -910,8 +910,8 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                 <button 
                   onClick={() => setSelectedPaymentMethod('paypal')}
                   className={`w-full py-3 px-4 border ${selectedPaymentMethod === 'paypal' 
-                    ? 'border-indigo-500 bg-indigo-50' 
-                    : 'border-gray-300'} rounded-md flex items-center justify-between hover:bg-gray-50 transition-colors`}
+                    ? 'border-coffee-500 bg-coffee-50' 
+                    : 'border-gray-300'} rounded-xl flex items-center justify-between hover:bg-gray-50 transition-colors`}
                 >
                   <span className="font-medium">PayPal</span>
                   <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg" alt="PayPal" className="h-6" />
@@ -923,8 +923,8 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                   <button 
                     onClick={() => setSelectedPaymentMethod('razorpay')}
                     className={`w-full py-3 px-4 border ${selectedPaymentMethod === 'razorpay' 
-                      ? 'border-indigo-500 bg-indigo-50' 
-                      : 'border-gray-300'} rounded-md flex items-center justify-between hover:bg-gray-50 transition-colors`}
+                      ? 'border-coffee-500 bg-coffee-50' 
+                      : 'border-gray-300'} rounded-xl flex items-center justify-between hover:bg-gray-50 transition-colors`}
                   >
                     <span className="font-medium">Razorpay</span>
                     <img src="https://razorpay.com/assets/razorpay-glyph.svg" alt="Razorpay" className="h-6" />
@@ -937,7 +937,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
             <div className="flex justify-between">
               <button 
                 onClick={() => setShowPaymentSection(false)}
-                className="py-2 px-4 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                className="py-2 px-4 bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300 transition-colors"
               >
                 Back
               </button>
@@ -946,7 +946,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                   <div id="paypal-button-container" className="mt-2"></div>
                   <button
                     onClick={processPayment}
-                    className="py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors w-full mt-2"
+                    className="py-2 px-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all duration-300 transform hover:scale-105 w-full mt-2"
                   >
                     Pay with PayPal
                   </button>
@@ -965,7 +965,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                     
                     processPayment();
                   }}
-                  className={`py-2 px-4 ${selectedPaymentMethod ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-md transition-colors ${isLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+                  className={`py-2 px-4 ${selectedPaymentMethod ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-xl transition-all duration-300 transform hover:scale-105 ${isLoading ? 'cursor-not-allowed opacity-50' : ''}`}
                   disabled={isLoading}
                 >
                   {isLoading ? 'Processing...' : selectedPaymentMethod ? 'Proceed to Payment' : 'Select Payment Method'}
@@ -976,23 +976,23 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         </div>
       ) : (
         <>
-          <div className="flex-1 overflow-y-auto mb-4 space-y-3 rounded-xl p-4 bg-white/80 backdrop-blur-sm border border-indigo-100">
+          <div className="flex-1 overflow-y-auto mb-3 sm:mb-4 space-y-2 sm:space-y-3 rounded-xl p-3 sm:p-4 bg-white/90 backdrop-blur-sm border border-white/20">
             {messages.map((message) => (
               <div
                 key={message.id}
                 className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[75%] relative p-3 mb-2 rounded-xl shadow-md transition-all duration-200
-                    ${message.sender === 'user' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-gray-900'}`}
+                  className={`max-w-[85%] sm:max-w-[75%] relative p-2.5 sm:p-3 mb-1.5 sm:mb-2 rounded-xl shadow-md transition-all duration-200
+                    ${message.sender === 'user' ? 'bg-gradient-to-r from-coffee-500 to-purple-600 text-white' : 'bg-slate-100 text-gray-900'}`}
                 >
-                  <div className={`chat-header font-medium ${message.sender === 'user' ? '' : 'text-indigo-700'}`}>
+                  <div className={`chat-header font-medium text-xs sm:text-sm ${message.sender === 'user' ? '' : 'text-coffee-700'}`}>
                     {message.sender === 'user' ? 'You' : 'AIstroGPT'}{' '}
                     <time className="text-xs opacity-70">
                       {new Date(message.timestamp).toLocaleTimeString()}
                     </time>
                   </div>
-                  <div className={`chat-bubble max-w-md break-words mt-1 ${message.sender === 'user' ? 'chat-bubble-primary text-white' : 'text-gray-800'}`}>
+                  <div className={`chat-bubble max-w-md break-words mt-1 text-sm sm:text-base ${message.sender === 'user' ? 'chat-bubble-primary text-white' : 'text-gray-800'}`}>
                     {message.content}
                   </div>
                 </div>
@@ -1002,7 +1002,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
             {isTyping && (
               <div className="flex justify-start mb-4">
                 <div className="max-w-[75%] relative p-3 mb-2 rounded-xl shadow-md bg-slate-100 text-gray-900">
-                  <div className="chat-header font-medium text-indigo-700">AIstroGPT</div>
+                  <div className="chat-header font-medium text-coffee-700">AIstroGPT</div>
                   <div className="chat-bubble mt-1 text-gray-800">
                     <span className="typing">...</span>
                   </div>
@@ -1019,13 +1019,13 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
               value={input}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
               placeholder={!chatStarted ? 'Click Start/Send to begin...' : (isTyping ? 'AIstroGPT is thinking...' : 'Type your message...')}
-              className="flex-1 p-3 bg-white border border-indigo-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+              className="flex-1 p-2.5 sm:p-3 bg-white border border-gray-300 rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 text-sm sm:text-base"
               disabled={isTyping || !chatStarted}
             />
           </form>
           
           {/* Footer with other controls */}
-          <div className="flex items-center justify-between mt-4">
+          <div className="flex items-center justify-between mt-3 sm:mt-4 gap-2">
             { (
               <button
                 onClick={() => {
@@ -1034,7 +1034,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                   }
                   handleTestAstroApi();
                 }}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700 transition-all duration-200 font-medium text-sm"
+                className="px-3 sm:px-4 py-2 bg-gradient-to-r from-coffee-500 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 font-medium text-xs sm:text-sm"
                 disabled={isTyping}
               >
                 Start/Send
@@ -1042,9 +1042,9 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
             )}
             <button
               onClick={onEndChat}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg shadow hover:bg-red-700 transition-all duration-200 font-medium text-sm flex items-center"
+              className="px-3 sm:px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 font-medium text-xs sm:text-sm flex items-center"
             >
-              <XMarkIcon className="w-4 h-4 mr-1" />
+              <XMarkIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
               End Chat
             </button>
           </div>
