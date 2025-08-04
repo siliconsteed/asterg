@@ -4,12 +4,6 @@ import { useEffect } from 'react';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 
-export const metadata = {
-  title: "Privacy Policy | AistroGPT - Data Protection",
-  description: "Read the privacy policy for AistroGPT. Learn how we protect your data and ensure your privacy on our AI astrology platform.",
-  keywords: ["privacy policy", "data protection", "AistroGPT", "AI astrology", "aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"]
-};
-
 export default function PrivacyPolicyPage() {
   useEffect(() => {
     AOS.init({

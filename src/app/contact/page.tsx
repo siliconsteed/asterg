@@ -4,12 +4,6 @@ import { useState, useEffect } from 'react';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 
-export const metadata = {
-  title: "Contact | AistroGPT - Get in Touch",
-  description: "Contact AistroGPT for support, feedback, or inquiries about our AI-powered astrology platform.",
-  keywords: ["contact", "support", "feedback", "AistroGPT", "AI astrology", "aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"]
-};
-
 export default function ContactPage() {
   useEffect(() => {
     AOS.init({
