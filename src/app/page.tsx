@@ -6,6 +6,7 @@ import Hero from '@/components/Hero';
 import Features from '@/components/Features';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
+import Script from 'next/script';
 
 export default function Home() {
   const [showArticles, setShowArticles] = useState(0); // 1 for displayed, 0 for hidden
@@ -57,6 +58,25 @@ export default function Home() {
 
   return (
     <main className="flex-grow bg-gradient-to-b from-orange-200 via-pink-300 via-purple-400 via-indigo-500 to-slate-700">
+      <Script
+        id="faq-structured-data"
+        type="application/ld+json"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'FAQPage',
+            'mainEntity': faqData.map(faq => ({
+              '@type': 'Question',
+              'name': faq.question,
+              'acceptedAnswer': {
+                '@type': 'Answer',
+                'text': faq.answer
+              }
+            }))
+          })
+        }}
+      />
       <Hero />
       <Features />
       
@@ -237,42 +257,52 @@ export default function Home() {
           
           <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">
             <div className="space-y-4">
-              {faqData.map((faq, index) => (
-                <div key={index} className="group" data-aos="fade-up" data-aos-delay={200 * (index + 1)}>
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300">
-                    <button
-                      onClick={() => toggleFaq(index)}
-                      className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50/50 transition-colors duration-200 rounded-2xl"
-                    >
-                      <div className="flex items-center">
-                        <svg className="w-5 h-5 text-coffee-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <h3 className="text-lg font-semibold leading-7 text-dark">
-                          {faq.question}
-                        </h3>
-                      </div>
-                      <div className={`ml-4 flex-shrink-0 transition-transform duration-300 ${openFaqs.includes(index) ? 'rotate-180' : ''}`}>
-                        <svg className="w-6 h-6 text-coffee-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </button>
-                    
-                    <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                      openFaqs.includes(index) ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
-                    }`}>
-                      <div className="px-6 pb-6">
-                        <div className="border-t border-gray-200 pt-4">
-                          <p className="text-base leading-7 text-gray-600">
-                            {faq.answer}
-                          </p>
+              {faqData.map((faq, index) => {
+                const isOpen = openFaqs.includes(index);
+                const buttonId = `faq-question-${index}`;
+                const panelId = `faq-answer-${index}`;
+                return (
+                  <div key={index} className="group" data-aos="fade-up" data-aos-delay={200 * (index + 1)}>
+                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300">
+                      <button
+                        id={buttonId}
+                        aria-expanded={isOpen}
+                        aria-controls={panelId}
+                        onClick={() => toggleFaq(index)}
+                        className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50/50 transition-colors duration-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-coffee-400"
+                      >
+                        <div className="flex items-center">
+                          <svg className="w-5 h-5 text-coffee-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <h3 className="text-lg font-semibold leading-7 text-dark">
+                            {faq.question}
+                          </h3>
+                        </div>
+                        <div className={`ml-4 flex-shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
+                          <svg className="w-6 h-6 text-coffee-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </button>
+                      <div
+                        id={panelId}
+                        role="region"
+                        aria-labelledby={buttonId}
+                        className={`overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}
+                      >
+                        <div className="px-6 pb-6">
+                          <div className="border-t border-gray-200 pt-4">
+                            <p className="text-base leading-7 text-gray-800">
+                              {faq.answer}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
