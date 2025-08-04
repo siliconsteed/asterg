@@ -1,3 +1,9 @@
+export const metadata = {
+  title: "View Data | AistroGPT - Export & Manage Data",
+  description: "View, export, and manage your astrology data stored with AistroGPT. Secure and private data handling.",
+  keywords: ["view data", "export data", "manage data", "AistroGPT", "AI astrology", "aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"]
+};
+
 'use client';
 
 import { useState, useEffect } from 'react';

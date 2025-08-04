@@ -5,6 +5,12 @@ import Chat from '@/components/Chat';
 
 import { useEffect } from 'react';
 
+export const metadata = {
+  title: "History | AistroGPT - Chat History",
+  description: "View your past astrology chat sessions and continue your conversations with AistroGPT.",
+  keywords: ["history", "chat history", "AistroGPT", "AI astrology", "aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"]
+};
+
 export default function HistoryPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 const [user, setUser] = useState<any>(null);

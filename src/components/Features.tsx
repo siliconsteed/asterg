@@ -77,13 +77,13 @@ export default function Features() {
                     <div className={`p-3 rounded-xl bg-white shadow-sm group-hover:shadow-md transition-shadow duration-300`}>
                       <feature.icon className={`h-6 w-6 flex-none ${feature.iconColor}`} aria-hidden="true" />
                     </div>
-                    {feature.name}
+                    <h3 className="text-lg font-semibold leading-7 text-dark mb-0">{feature.name}</h3>
                   </dt>
-                  <dd className="flex flex-auto flex-col text-base leading-7 text-gray-600">
+                  <dd className="flex flex-auto flex-col text-base leading-7 text-gray-800">
                     <p className="flex-auto">{feature.description}</p>
                     <div className="mt-4 flex items-center text-sm text-coffee-600 group-hover:text-coffee-700 transition-colors duration-300">
                       <span>Learn more</span>
-                      <svg className="w-4 h-4 ml-1 transform group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 ml-1 transform group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </div>

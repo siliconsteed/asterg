@@ -4,6 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+export const metadata = {
+  title: "Register | AistroGPT - Create Account",
+  description: "Register for an account on AistroGPT and start your personalized AI astrology journey.",
+  keywords: ["register", "sign up", "create account", "AistroGPT", "AI astrology", "aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"]
+};
+
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

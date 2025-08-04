@@ -1,0 +1,26 @@
+# robots.txt for aistrogpt.com
+# SEO optimized
+
+# Allow all search engines to crawl the entire site
+User-agent: *
+Allow: /
+
+# Block access to admin areas and private directories
+Disallow: /admin/
+Disallow: /private/
+Disallow: /_next/
+Disallow: /api/
+Disallow: /temp/
+Disallow: /tmp/
+
+# Allow important files for SEO
+Allow: /assets/
+Allow: /images/
+Allow: /*.css$
+Allow: /*.js$
+
+# Sitemap location
+Sitemap: https://aistrogpt.com/sitemap.xml
+
+# Crawl delay (optional - prevents server overload)
+Crawl-delay: 1

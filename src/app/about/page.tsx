@@ -4,6 +4,12 @@ import { useEffect } from 'react';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 
+export const metadata = {
+  title: "About | AistroGPT - AI Astrology Platform",
+  description: "Learn about AistroGPT, our mission, vision, and the team behind the AI-powered astrology platform.",
+  keywords: ["about", "AistroGPT", "AI astrology", "mission", "vision", "team", "aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"]
+};
+
 export default function AboutPage() {
   useEffect(() => {
     AOS.init({

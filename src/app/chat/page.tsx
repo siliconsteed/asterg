@@ -115,15 +115,14 @@ export default function ChatPage() {
 
         {/* Main Content - Mobile Optimized */}
         <div className="flex flex-col lg:flex-row gap-4 sm:gap-8 justify-center items-start max-w-7xl mx-auto">
-          {/* User Details Form */}
-          <div className="w-full lg:w-1/3 order-2 lg:order-1" data-aos="fade-right" data-aos-delay="200">
+          {/* User Details Form - always first on mobile */}
+          <div className="w-full lg:w-1/3 order-1 lg:order-1" data-aos="fade-right" data-aos-delay="200">
             <div className="glass rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
               <UserDetailsForm onSetData={handleSetData} disabled={detailsSet} />
             </div>
           </div>
-
           {/* Chat Component */}
-          <div className="w-full lg:w-2/3 order-1 lg:order-2" data-aos="fade-left" data-aos-delay="400">
+          <div className="w-full lg:w-2/3 order-2 lg:order-2" data-aos="fade-left" data-aos-delay="400">
             <Chat 
               onEndChat={handleEndChat} 
               onReturnToDetails={handleReturnToDetails}

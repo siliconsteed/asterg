@@ -61,7 +61,7 @@ export default function Hero() {
             <div className="relative rounded-full p-3 bg-white bg-opacity-30 backdrop-blur-sm shadow-2xl ring-2 ring-coffee-200 hover:ring-coffee-300 transition-all duration-300 transform hover:scale-110">
               <img
                 src="/assets/sundial.jpg"
-                alt="Aistrogpt Logo"
+                alt="AistroGPT logo: stylized sundial representing cosmic guidance"
                 className="h-24 w-24 object-cover rounded-full"
                 width={96}
                 height={96}
