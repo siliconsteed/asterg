@@ -4,12 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Script from 'next/script';
 
-export const metadata = {
-  title: "Payment | AistroGPT - Buy Astrology Chat Session",
-  description: "Purchase an AI astrology chat session with AistroGPT. Secure payment and instant access to personalized readings.",
-  keywords: ["payment", "buy chat", "AI astrology", "AistroGPT", "aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"]
-};
-
 declare global {
   interface Window {
     Razorpay: any;
