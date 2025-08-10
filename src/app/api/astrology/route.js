@@ -1,12 +1,21 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import { Redis } from '@upstash/redis';
 
 // Helper function to log requests
 function logRequestDetails(request) {
   console.log('Request Headers:', Object.fromEntries(request.headers.entries()));
   console.log('Request URL:', request.url);
   console.log('Request Method:', request.method);
+}
+
+// In-memory daily quota (no env vars, no Supabase)
+// Note: Works reliably on a single long-lived server process. Not suitable for serverless/multi-instance.
+const DAILY_LIMIT = 48; // First 48 requests per UTC day use Free API; thereafter use RVA
+let freeUsageCount = 0;
+let dateKeyAtLastReset = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+
+function getUtcDateKey() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 export async function POST(request) {
@@ -35,31 +44,16 @@ export async function POST(request) {
       );
     }
 
-    // Daily quota with Upstash Redis: first N requests use Free API, then use RVA
-    const DAILY_LIMIT = Number(process.env.FREE_API_DAILY_LIMIT || 48);
-
-    const secondsUntilNextUtcMidnight = () => {
-      const now = new Date();
-      const next = new Date(now);
-      next.setUTCHours(24, 0, 0, 0);
-      return Math.floor((+next - +now) / 1000);
-    };
-
+    // Daily quota in memory: rotate at UTC midnight
     let chosenProvider = 'FREE';
-    try {
-      const redis = Redis.fromEnv();
-      const dateKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
-      const key = `astro:free-usage:${dateKey}`;
-      const count = await redis.incr(key);
-      if (count === 1) {
-        await redis.expire(key, secondsUntilNextUtcMidnight());
-      }
-      if (count > DAILY_LIMIT) {
-        chosenProvider = 'RVA';
-      }
-    } catch (err) {
-      console.warn('Upstash Redis unavailable or not configured. Proceeding without quota enforcement.', err?.message || err);
-      chosenProvider = 'FREE';
+    const nowKey = getUtcDateKey();
+    if (nowKey !== dateKeyAtLastReset) {
+      freeUsageCount = 0;
+      dateKeyAtLastReset = nowKey;
+    }
+    freeUsageCount += 1; // count this request attempt
+    if (freeUsageCount > DAILY_LIMIT) {
+      chosenProvider = 'RVA';
     }
 
     let astroApiResult = null;
