@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
+import { Redis } from '@upstash/redis';
 
 // Helper function to log requests
 function logRequestDetails(request) {
@@ -34,69 +35,96 @@ export async function POST(request) {
       );
     }
 
-    // API provider toggle: 0 = Free Astro API, 1 = RVA API
-    const ASTRO_API_PROVIDER = 1; // Set to 1 for RVA API, 0 for Free Astro API
+    // Daily quota with Upstash Redis: first N requests use Free API, then use RVA
+    const DAILY_LIMIT = Number(process.env.FREE_API_DAILY_LIMIT || 48);
+
+    const secondsUntilNextUtcMidnight = () => {
+      const now = new Date();
+      const next = new Date(now);
+      next.setUTCHours(24, 0, 0, 0);
+      return Math.floor((+next - +now) / 1000);
+    };
+
+    let chosenProvider = 'FREE';
+    try {
+      const redis = Redis.fromEnv();
+      const dateKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+      const key = `astro:free-usage:${dateKey}`;
+      const count = await redis.incr(key);
+      if (count === 1) {
+        await redis.expire(key, secondsUntilNextUtcMidnight());
+      }
+      if (count > DAILY_LIMIT) {
+        chosenProvider = 'RVA';
+      }
+    } catch (err) {
+      console.warn('Upstash Redis unavailable or not configured. Proceeding without quota enforcement.', err?.message || err);
+      chosenProvider = 'FREE';
+    }
 
     let astroApiResult = null;
-    if (ASTRO_API_PROVIDER === 1) {
-      // RVA API expects: date (YYYY-MM-DD), time (HH:mm), lat, lon, timezone
-      try {
-        const dateStr = `${body.year}-${String(body.month).padStart(2, '0')}-${String(body.date).padStart(2, '0')}`;
-        const timeStr = `${String(body.hours).padStart(2, '0')}:${String(body.minutes).padStart(2, '0')}`;
-        const payload = {
-          date: dateStr,
-          time: timeStr,
-          lat: body.latitude,
-          lon: body.longitude,
-          timezone: typeof body.timezone === 'string' ? parseFloat(body.timezone) : body.timezone
-        };
-        const apiResponse = await axios.post('https://rva-api.onrender.com/calculate-planets', payload);
-        astroApiResult = apiResponse.data;
-      } catch (err) {
+
+    const callRva = async () => {
+      const dateStr = `${body.year}-${String(body.month).padStart(2, '0')}-${String(body.date).padStart(2, '0')}`;
+      const timeStr = `${String(body.hours).padStart(2, '0')}:${String(body.minutes).padStart(2, '0')}`;
+      const payload = {
+        date: dateStr,
+        time: timeStr,
+        lat: body.latitude,
+        lon: body.longitude,
+        timezone: typeof body.timezone === 'string' ? parseFloat(body.timezone) : body.timezone
+      };
+      const apiResponse = await axios.post('https://rva-api.onrender.com/calculate-planets', payload);
+      return apiResponse.data;
+    };
+
+    const callFree = async () => {
+      if (!process.env.FREE_ASTRO_API_KEY) {
+        throw new Error('Missing FREE_ASTRO_API_KEY environment variable');
+      }
+      const payload = {
+        year: body.year,
+        month: body.month,
+        date: body.date,
+        hours: body.hours,
+        minutes: body.minutes,
+        seconds: body.seconds || 0,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        timezone: typeof body.timezone === 'string' ? parseFloat(body.timezone) : body.timezone,
+        settings: {
+          observation_point: 'topocentric',
+          ayanamsha: 'lahiri'
+        }
+      };
+      const apiResponse = await axios.post('https://json.freeastrologyapi.com/planets', payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.FREE_ASTRO_API_KEY
+        },
+        timeout: 10000
+      });
+      return apiResponse.data;
+    };
+
+    try {
+      if (chosenProvider === 'FREE') {
+        astroApiResult = await callFree();
+      } else {
+        astroApiResult = await callRva();
+      }
+    } catch (err) {
+      if (chosenProvider === 'FREE') {
+        console.warn('Free API failed or not configured; falling back to RVA. Reason:', err?.message || err);
+        try {
+          astroApiResult = await callRva();
+        } catch (rvaErr) {
+          console.error('Fallback to RVA failed:', rvaErr);
+          astroApiResult = { error: 'Failed to fetch from RVA API after Free API failure' };
+        }
+      } else {
         console.error('Failed to fetch from RVA API:', err);
         astroApiResult = { error: 'Failed to fetch from RVA API' };
-      }
-    } else {
-      // Free Astrology API
-      if (!process.env.FREE_ASTRO_API_KEY) {
-        const errorMsg = 'Missing FREE_ASTRO_API_KEY environment variable.\n\nTroubleshooting steps:\n1. Ensure .env.local exists in your project root.\n2. Add FREE_ASTRO_API_KEY=your_actual_key_here to .env.local.\n3. Restart your dev server after editing .env.local.';
-        console.error(errorMsg);
-        return NextResponse.json(
-          { 
-            error: 'Server configuration error',
-            details: process.env.NODE_ENV === 'development' ? errorMsg : undefined,
-            solution: 'Please set the FREE_ASTRO_API_KEY in your .env.local file'
-          },
-          { status: 500 }
-        );
-      }
-      try {
-        const payload = {
-          year: body.year,
-          month: body.month,
-          date: body.date,
-          hours: body.hours,
-          minutes: body.minutes,
-          seconds: body.seconds || 0,
-          latitude: body.latitude,
-          longitude: body.longitude,
-          timezone: typeof body.timezone === 'string' ? parseFloat(body.timezone) : body.timezone,
-          settings: {
-            observation_point: "topocentric",
-            ayanamsha: "lahiri"
-          }
-        };
-        const apiResponse = await axios.post('https://json.freeastrologyapi.com/planets', payload, {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': process.env.FREE_ASTRO_API_KEY
-          },
-          timeout: 10000
-        });
-        astroApiResult = apiResponse.data;
-      } catch (err) {
-        console.error('Failed to fetch from Free Astrology API:', err);
-        astroApiResult = { error: 'Failed to fetch from Free Astrology API' };
       }
     }
 
