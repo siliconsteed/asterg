@@ -895,13 +895,13 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         <div className="flex-1 flex flex-col justify-center items-center animate-fade-in">
           <div className="bg-white/90 p-8 rounded-2xl shadow-xl w-full max-w-md transition-all duration-300">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-gray-900 text-lg">Choose Payment Method</h3>
+              <h3 className="font-bold text-gray-900 text-lg font-mozilla-headline">Choose Payment Method</h3>
               <CreditCardIcon className="w-6 h-6 text-coffee-600" />
             </div>
             <div className="bg-gray-50 p-5 rounded-2xl mb-6 flex flex-col items-center">
-              <p className="text-base text-gray-700 mb-1">Access to AIstroGPT Chat</p>
-              <p className="text-2xl font-extrabold text-coffee-700">5 USD</p>
-              <p className="text-xs text-gray-500 mt-2">One-time payment for 10 minutes of chat access</p>
+              <p className="text-base text-gray-700 mb-1 font-mozilla-headline">Access to AIstroGPT Chat</p>
+              <p className="text-2xl font-extrabold text-black font-mozilla-headline">4.99 USD</p>
+              <p className="text-xs text-gray-500 mt-2 font-mozilla-headline">One-time payment for 10 minutes of chat access</p>
             </div>
             <div className="space-y-4 mb-6">
               {disablePaypal === 0 && (
@@ -911,14 +911,14 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                   aria-pressed={selectedPaymentMethod === 'paypal'}
                   onClick={() => setSelectedPaymentMethod('paypal')}
                   onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setSelectedPaymentMethod('paypal')}
-                  className={`w-full flex items-center justify-between border rounded-2xl px-5 py-4 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-coffee-400 group ${selectedPaymentMethod === 'paypal' ? 'border-coffee-500 bg-coffee-50 shadow-md' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
+                  className={`w-full flex items-center justify-between border rounded-2xl px-5 py-4 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-coffee-400 group font-mozilla-headline ${selectedPaymentMethod === 'paypal' ? 'border-coffee-500 bg-coffee-50 shadow-md' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
                 >
                   <div className="flex items-center gap-3">
                     <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg" alt="PayPal" className="h-7" />
-                    <span className="font-medium text-gray-800">PayPal</span>
+                    <span className="font-medium text-gray-800 font-mozilla-headline">PayPal</span>
                   </div>
                   {selectedPaymentMethod === 'paypal' && (
-                    <span className="ml-2 text-green-600" aria-label="Selected">✔</span>
+                    <span className="ml-2 text-green-600 font-mozilla-headline" aria-label="Selected">✔</span>
                   )}
                 </div>
               )}
@@ -933,10 +933,10 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                 >
                   <div className="flex items-center gap-3">
                     <img src="https://razorpay.com/assets/razorpay-glyph.svg" alt="Razorpay" className="h-7" />
-                    <span className="font-medium text-gray-800">Razorpay</span>
+                    <span className="font-medium text-gray-800 font-mozilla-headline">Razorpay</span>
                   </div>
                   {selectedPaymentMethod === 'razorpay' && (
-                    <span className="ml-2 text-green-600" aria-label="Selected">✔</span>
+                    <span className="ml-2 text-green-600 font-mozilla-headline" aria-label="Selected">✔</span>
                   )}
                 </div>
               )}
@@ -944,7 +944,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
             <div className="flex justify-between gap-4">
               <button
                 onClick={() => setShowPaymentSection(false)}
-                className="py-2 px-5 bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-coffee-400"
+                className="py-2 px-5 bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-coffee-400 font-mozilla-headline"
               >
                 Back
               </button>
@@ -957,7 +957,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                   if (isLoading) return;
                   processPayment();
                 }}
-                className={`py-2 px-6 flex items-center justify-center gap-2 ${selectedPaymentMethod ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-coffee-400 ${isLoading ? 'cursor-not-allowed opacity-60' : ''}`}
+                className={`py-2 px-6 flex items-center justify-center gap-2 font-mozilla-headline ${selectedPaymentMethod ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-coffee-400 ${isLoading ? 'cursor-not-allowed opacity-60' : ''}`}
                 disabled={isLoading || !selectedPaymentMethod}
                 aria-disabled={isLoading || !selectedPaymentMethod}
               >
