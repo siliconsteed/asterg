@@ -145,7 +145,7 @@ interface ChatProps {
 }
 
 // Set to 0 to bypass payment flow, 1 to show payment options
-const skipPayment: number = 0; // When 0, payment step is skipped
+const skipPayment: number = 1; // When 0, payment step is skipped
 
 // Set to 1 to disable Razorpay, 0 to enable it
 const disableRazorpay: number = 0; // When 1, Razorpay payment option is disabled
@@ -332,7 +332,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       // Render PayPal button in the paypal-button-container
       initializePayPalButton(
         'paypal-button-container', 
-        5.00, // $5 USD
+        4.99, // $4.99 USD
         handlePaymentComplete,
         handlePaymentError
       );
@@ -892,86 +892,95 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         </div>
       ) : showPaymentSection ? (
         // Payment UI
-        <div className="flex-1 flex flex-col justify-center items-center">
-          <div className="bg-white/90 p-6 rounded-xl shadow-md w-full max-w-md">
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="font-semibold text-gray-800">Choose Payment Method</h3>
-              <CreditCardIcon className="w-5 h-5 text-coffee-600" />
+        <div className="flex-1 flex flex-col justify-center items-center animate-fade-in">
+          <div className="bg-white/90 p-8 rounded-2xl shadow-xl w-full max-w-md transition-all duration-300">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-bold text-gray-900 text-lg font-mozilla-headline">Choose Payment Method</h3>
+              <CreditCardIcon className="w-6 h-6 text-coffee-600" />
             </div>
-            
-            <div className="bg-gray-50 p-4 rounded-xl mb-5">
-              <p className="text-sm text-gray-600 mb-2">Access to AIstroGPT Chat</p>
-              <p className="text-lg font-bold text-coffee-700"> 5 USD</p>
-              <p className="text-xs text-gray-500 mt-1">One-time payment for 10 minutes of chat access</p>
+            <div className="bg-gray-50 p-5 rounded-2xl mb-6 flex flex-col items-center">
+              <p className="text-base text-gray-700 mb-1 font-mozilla-headline">Access to AIstroGPT Chat</p>
+              <p className="text-2xl font-extrabold text-black font-mozilla-headline">4.99 USD</p>
+              <p className="text-xs text-gray-500 mt-2 font-mozilla-headline">One-time payment for 10 minutes of chat access</p>
             </div>
-            
-            <div className="space-y-3 mb-5">
+            <div className="space-y-4 mb-6">
               {disablePaypal === 0 && (
-                <button 
+                <div
+                  tabIndex={0}
+                  role="button"
+                  aria-pressed={selectedPaymentMethod === 'paypal'}
                   onClick={() => setSelectedPaymentMethod('paypal')}
-                  className={`w-full py-3 px-4 border ${selectedPaymentMethod === 'paypal' 
-                    ? 'border-coffee-500 bg-coffee-50' 
-                    : 'border-gray-300'} rounded-xl flex items-center justify-between hover:bg-gray-50 transition-colors`}
+                  onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setSelectedPaymentMethod('paypal')}
+                  className={`w-full flex items-center justify-between border rounded-2xl px-5 py-4 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-coffee-400 group font-mozilla-headline ${selectedPaymentMethod === 'paypal' ? 'border-coffee-500 bg-coffee-50 shadow-md' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
                 >
-                  <span className="font-medium">PayPal</span>
-                  <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg" alt="PayPal" className="h-6" />
-                </button>
+                  <div className="flex items-center gap-3">
+                    <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg" alt="PayPal" className="h-7" />
+                    <span className="font-medium text-gray-800 font-mozilla-headline">PayPal</span>
+                  </div>
+                  {selectedPaymentMethod === 'paypal' && (
+                    <span className="ml-2 text-green-600 font-mozilla-headline" aria-label="Selected">✔</span>
+                  )}
+                </div>
               )}
-              
               {disableRazorpay === 0 && (
-                <div>
-                  <button 
-                    onClick={() => setSelectedPaymentMethod('razorpay')}
-                    className={`w-full py-3 px-4 border ${selectedPaymentMethod === 'razorpay' 
-                      ? 'border-coffee-500 bg-coffee-50' 
-                      : 'border-gray-300'} rounded-xl flex items-center justify-between hover:bg-gray-50 transition-colors`}
-                  >
-                    <span className="font-medium">Razorpay</span>
-                    <img src="https://razorpay.com/assets/razorpay-glyph.svg" alt="Razorpay" className="h-6" />
-                  </button>
-                  <p className="text-xs text-gray-700 font-normal mt-1 text-left">Razorpay for India</p>
+                <div
+                  tabIndex={0}
+                  role="button"
+                  aria-pressed={selectedPaymentMethod === 'razorpay'}
+                  onClick={() => setSelectedPaymentMethod('razorpay')}
+                  onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setSelectedPaymentMethod('razorpay')}
+                  className={`w-full flex items-center justify-between border rounded-2xl px-5 py-4 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-coffee-400 group ${selectedPaymentMethod === 'razorpay' ? 'border-coffee-500 bg-coffee-50 shadow-md' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <img src="https://razorpay.com/assets/razorpay-glyph.svg" alt="Razorpay" className="h-7" />
+                    <span className="font-medium text-gray-800 font-mozilla-headline">Razorpay</span>
+                  </div>
+                  {selectedPaymentMethod === 'razorpay' && (
+                    <span className="ml-2 text-green-600 font-mozilla-headline" aria-label="Selected">✔</span>
+                  )}
                 </div>
               )}
             </div>
-            
-            <div className="flex justify-between">
-              <button 
+            <div className="flex justify-between gap-4">
+              <button
                 onClick={() => setShowPaymentSection(false)}
-                className="py-2 px-4 bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300 transition-colors"
+                className="py-2 px-5 bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-coffee-400 font-mozilla-headline"
               >
                 Back
               </button>
-              {selectedPaymentMethod === 'paypal' ? (
-                <div className="w-48">
-                  <div id="paypal-button-container" className="mt-2"></div>
-                  <button
-                    onClick={processPayment}
-                    className="py-2 px-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all duration-300 transform hover:scale-105 w-full mt-2"
-                  >
-                    Pay with PayPal
-                  </button>
-                </div>
-              ) : (
-                <button 
-                  onClick={() => {
-                    // Handle fallback if user somehow selects an invalid payment method
-                    if (!selectedPaymentMethod) {
-                      alert('Please select a valid payment method');
-                      return;
-                    }
-                    
-                    // Disable the button while processing payment
-                    if (isLoading) return;
-                    
-                    processPayment();
-                  }}
-                  className={`py-2 px-4 ${selectedPaymentMethod ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-xl transition-all duration-300 transform hover:scale-105 ${isLoading ? 'cursor-not-allowed opacity-50' : ''}`}
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'Processing...' : selectedPaymentMethod ? 'Proceed to Payment' : 'Select Payment Method'}
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  if (!selectedPaymentMethod) {
+                    alert('Please select a valid payment method');
+                    return;
+                  }
+                  if (isLoading) return;
+                  processPayment();
+                }}
+                className={`py-2 px-6 flex items-center justify-center gap-2 font-mozilla-headline ${selectedPaymentMethod ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-coffee-400 ${isLoading ? 'cursor-not-allowed opacity-60' : ''}`}
+                disabled={isLoading || !selectedPaymentMethod}
+                aria-disabled={isLoading || !selectedPaymentMethod}
+              >
+                {isLoading && (
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                  </svg>
+                )}
+                {isLoading ? 'Processing...' : selectedPaymentMethod ? 'Proceed to Payment' : 'Select Payment Method'}
+              </button>
             </div>
+            {/* Payment provider button containers, shown only if selected */}
+            {selectedPaymentMethod === 'paypal' && (
+              <div className="w-full mt-4 flex flex-col items-center">
+                <div id="paypal-button-container" className="w-full"></div>
+              </div>
+            )}
+            {selectedPaymentMethod === 'razorpay' && (
+              <div className="w-full mt-4 flex flex-col items-center">
+                {/* Razorpay button or container can be placed here if needed */}
+              </div>
+            )}
           </div>
         </div>
       ) : (
