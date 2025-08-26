@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface UserDetails {
   email: string;
@@ -15,12 +15,6 @@ interface UserDetailsFormProps {
   disabled: boolean;
 }
 
-const times = Array.from({length: 24*2}, (_, i) => {
-  const hour = Math.floor(i/2).toString().padStart(2, '0');
-  const min = i%2 === 0 ? '00' : '30';
-  return `${hour}:${min}`;
-});
-
 export default function UserDetailsForm({ onSetData, disabled }: UserDetailsFormProps) {
   const [form, setForm] = useState<UserDetails>({
     email: '',
@@ -33,25 +27,163 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
   });
 
   const [preview, setPreview] = useState<string>('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Manage lat/lon as text for better UX (allow '-' and partial input),
+  // then sync to numeric state when valid
+  const [latInput, setLatInput] = useState<string>('0');
+  const [lonInput, setLonInput] = useState<string>('0');
+  const [timezoneInput, setTimezoneInput] = useState<string>('5.5');
+
+  // Sync text inputs from numeric form state on mount/whenever form changes externally
+  useEffect(() => {
+    setLatInput(String(form.lat));
+    setLonInput(String(form.lon));
+    setTimezoneInput(String(form.timezone));
+  }, [form.lat, form.lon, form.timezone]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setForm(f => ({ ...f, [name]: name === 'lat' || name === 'lon' ? Number(value) : value }));
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+    
+    setForm(f => {
+      switch (name) {
+        case 'email':
+          return { ...f, email: value };
+        case 'dob':
+          return { ...f, dob: value };
+        case 'pob':
+          return { ...f, pob: value };
+        default:
+          return f;
+      }
+    });
+  };
+
+  // Helpers for validating and formatting coordinates
+  const coordPattern = /^-?\d{0,3}(?:\.(\d{0,6})?)?$/; // up to 3 integer digits, up to 6 decimals
+
+  const formatTo3dp = (num: number) => {
+    return Number.isFinite(num) ? Number(num.toFixed(3)) : num;
+  };
+
+  const clamp = (num: number, min: number, max: number) => Math.min(Math.max(num, min), max);
+
+  const onLatChange = (value: string) => {
+    // Allow empty or just '-' during typing
+    if (value === '' || value === '-') {
+      setLatInput(value);
+      return;
+    }
+    if (coordPattern.test(value)) {
+      setLatInput(value);
+    }
+  };
+
+  const onLonChange = (value: string) => {
+    if (value === '' || value === '-') {
+      setLonInput(value);
+      return;
+    }
+    if (coordPattern.test(value)) {
+      setLonInput(value);
+    }
+  };
+
+  const onLatBlur = () => {
+    const num = parseFloat(latInput);
+    if (!isNaN(num)) {
+      const clamped = clamp(num, -90, 90);
+      const rounded = formatTo3dp(clamped);
+      setLatInput(String(rounded));
+      setForm(f => ({ ...f, lat: rounded }));
+    } else {
+      // reset to previous valid form value
+      setLatInput(String(form.lat));
+    }
+  };
+
+  const onLonBlur = () => {
+    const num = parseFloat(lonInput);
+    if (!isNaN(num)) {
+      const clamped = clamp(num, -180, 180);
+      const rounded = formatTo3dp(clamped);
+      setLonInput(String(rounded));
+      setForm(f => ({ ...f, lon: rounded }));
+    } else {
+      setLonInput(String(form.lon));
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!form.email) {
+      newErrors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+
+    if (!form.dob) {
+      newErrors.dob = 'Date of birth is required';
+    }
+
+    if (!form.tob) {
+      newErrors.tob = 'Time of birth is required';
+    }
+
+    if (!form.pob) {
+      newErrors.pob = 'Place of birth is required';
+    }
+
+    if (isNaN(parseFloat(latInput)) || latInput === '') {
+      newErrors.lat = 'Valid latitude is required';
+    }
+
+    if (isNaN(parseFloat(lonInput)) || lonInput === '') {
+      newErrors.lon = 'Valid longitude is required';
+    }
+
+    if (isNaN(parseFloat(timezoneInput)) || timezoneInput === '') {
+      newErrors.timezone = 'Valid timezone is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = () => {
+    if (validateForm()) {
+      // Ensure latest lat/lon are synchronized and valid before submit
+      const latNum = formatTo3dp(clamp(parseFloat(latInput), -90, 90));
+      const lonNum = formatTo3dp(clamp(parseFloat(lonInput), -180, 180));
+      const timezoneNum = parseFloat(timezoneInput);
+      const details: UserDetails = { ...form, lat: latNum, lon: lonNum, timezone: timezoneNum };
+      onSetData(details);
+    }
   };
 
   const handlePreview = () => {
-    setPreview(JSON.stringify(form, null, 2));
+    const latNum = formatTo3dp(clamp(parseFloat(latInput), -90, 90));
+    const lonNum = formatTo3dp(clamp(parseFloat(lonInput), -180, 180));
+    const timezoneNum = parseFloat(timezoneInput);
+    const details: UserDetails = { ...form, lat: latNum, lon: lonNum, timezone: timezoneNum };
+    setPreview(JSON.stringify(details, null, 2));
   };
 
   return (
     <div className="p-4 sm:p-8 bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20">
       <div className="text-center mb-4 sm:mb-6">
-        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-coffee-400 to-purple-500 rounded-xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
+        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-amber-400 to-purple-500 rounded-xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
           <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
         </div>
-        <h2 className="text-xl sm:text-2xl font-bold text-dark mb-1 sm:mb-2">Your Birth Details</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">Your Birth Details</h2>
         <p className="text-gray-600 text-xs sm:text-sm">Enter your birth information for accurate astrological readings</p>
       </div>
       
@@ -65,10 +197,15 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
             placeholder="your.email@example.com"
             value={form.email}
             onChange={handleChange}
-            className="w-full p-2.5 sm:p-3 bg-white border border-gray-300 rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base"
+            className={`w-full p-2.5 sm:p-3 bg-white border rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base ${
+              errors.email 
+                ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+            }`}
             disabled={disabled}
             required
           />
+          {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
         </div>
 
         {/* Date of Birth Field */}
@@ -79,10 +216,15 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
             name="dob"
             value={form.dob}
             onChange={handleChange}
-            className="w-full p-2.5 sm:p-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base"
+            className={`w-full p-2.5 sm:p-3 bg-white border rounded-xl text-gray-900 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base ${
+              errors.dob 
+                ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+            }`}
             disabled={disabled}
             required
           />
+          {errors.dob && <p className="text-red-500 text-xs mt-1">{errors.dob}</p>}
         </div>
 
         {/* Time of Birth Field */}
@@ -94,9 +236,17 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
               value={form.tob.split(':')[0] || ''}
               onChange={e => {
                 const mm = form.tob.split(':')[1] || '00';
-                setForm(f => ({ ...f, tob: `${e.target.value}:${mm}` }));
+                const newTob = `${e.target.value}:${mm}`;
+                setForm(f => ({ ...f, tob: newTob }));
+                if (errors.tob) {
+                  setErrors(prev => ({ ...prev, tob: '' }));
+                }
               }}
-              className="flex-1 p-2.5 sm:p-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base"
+              className={`flex-1 p-2.5 sm:p-3 bg-white border rounded-xl text-gray-900 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base ${
+                errors.tob 
+                  ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                  : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+              }`}
               disabled={disabled}
               required
             >
@@ -110,18 +260,27 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
               value={form.tob.split(':')[1] || ''}
               onChange={e => {
                 const hh = form.tob.split(':')[0] || '00';
-                setForm(f => ({ ...f, tob: `${hh}:${e.target.value}` }));
+                const newTob = `${hh}:${e.target.value}`;
+                setForm(f => ({ ...f, tob: newTob }));
+                if (errors.tob) {
+                  setErrors(prev => ({ ...prev, tob: '' }));
+                }
               }}
-              className="flex-1 p-2.5 sm:p-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base"
+              className={`flex-1 p-2.5 sm:p-3 bg-white border rounded-xl text-gray-900 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base ${
+                errors.tob 
+                  ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                  : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+              }`}
               disabled={disabled}
               required
             >
               <option value="">Minute</option>
-              {['00','01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43','44','45','46','47','48','49','50','51','52','53','54','55','56','57','58','59'].map(mm => (
+              {Array.from({length: 60}, (_, i) => i.toString().padStart(2, '0')).map(mm => (
                 <option key={mm} value={mm}>{mm}</option>
               ))}
             </select>
           </div>
+          {errors.tob && <p className="text-red-500 text-xs mt-1">{errors.tob}</p>}
         </div>
 
         {/* Place of Birth Field */}
@@ -133,65 +292,120 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
             placeholder="e.g., New York, NY, USA"
             value={form.pob}
             onChange={handleChange}
-            className="w-full p-2.5 sm:p-3 bg-white border border-gray-300 rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base"
+            className={`w-full p-2.5 sm:p-3 bg-white border rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base ${
+              errors.pob 
+                ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+            }`}
             disabled={disabled}
             required
           />
+          {errors.pob && <p className="text-red-500 text-xs mt-1">{errors.pob}</p>}
         </div>
 
         {/* Coordinates Fields */}
         <div className="group">
           <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Coordinates</label>
           <div className="flex gap-2 sm:gap-3">
-            <input
-              type="number"
-              name="lat"
-              placeholder="Latitude"
-              value={form.lat}
-              onChange={handleChange}
-              className="flex-1 p-2.5 sm:p-3 bg-white border border-gray-300 rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base"
-              step="0.00001"
-              disabled={disabled}
-              required
-            />
-            <input
-              type="number"
-              name="lon"
-              placeholder="Longitude"
-              value={form.lon}
-              onChange={handleChange}
-              className="flex-1 p-2.5 sm:p-3 bg-white border border-gray-300 rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base"
-              step="0.00001"
-              disabled={disabled}
-              required
-            />
+            <div className="flex-1">
+              <input
+                type="text"
+                name="lat"
+                placeholder="Latitude"
+                value={latInput}
+                onChange={(e) => {
+                  onLatChange(e.target.value);
+                  if (errors.lat) {
+                    setErrors(prev => ({ ...prev, lat: '' }));
+                  }
+                }}
+                onBlur={onLatBlur}
+                inputMode="decimal"
+                className={`w-full p-2.5 sm:p-3 bg-white border rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base ${
+                  errors.lat 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+                }`}
+                disabled={disabled}
+                required
+              />
+              {errors.lat && <p className="text-red-500 text-xs mt-1">{errors.lat}</p>}
+            </div>
+            <div className="flex-1">
+              <input
+                type="text"
+                name="lon"
+                placeholder="Longitude"
+                value={lonInput}
+                onChange={(e) => {
+                  onLonChange(e.target.value);
+                  if (errors.lon) {
+                    setErrors(prev => ({ ...prev, lon: '' }));
+                  }
+                }}
+                onBlur={onLonBlur}
+                inputMode="decimal"
+                className={`w-full p-2.5 sm:p-3 bg-white border rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base ${
+                  errors.lon 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+                }`}
+                disabled={disabled}
+                required
+              />
+              {errors.lon && <p className="text-red-500 text-xs mt-1">{errors.lon}</p>}
+            </div>
           </div>
-          <p className="text-xs text-gray-500 mt-1">Find coordinates at <a href="https://www.latlong.net/" target="_blank" rel="noopener noreferrer" className="text-coffee-600 hover:text-coffee-700">latlong.net</a></p>
+          <p className="text-xs text-gray-500 mt-1">Find coordinates at <a href="https://www.latlong.net/" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:text-amber-700">latlong.net</a></p>
         </div>
 
         {/* Timezone Field */}
         <div className="group">
           <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Timezone</label>
           <input
-            type="number"
+            type="text"
             name="timezone"
             placeholder="e.g., 5.5 for IST, -7 for PDT"
-            value={form.timezone}
-            onChange={handleChange}
-            className="w-full p-2.5 sm:p-3 bg-white border border-gray-300 rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base"
-            step="0.25"
+            value={timezoneInput}
+            onChange={(e) => {
+              const value = e.target.value;
+              // Allow typing of numbers, one decimal, and a leading minus sign
+              if (/^-?\d*\.?\d*$/.test(value)) {
+                setTimezoneInput(value);
+              }
+              if (errors.timezone) {
+                setErrors(prev => ({ ...prev, timezone: '' }));
+              }
+            }}
+            onBlur={() => {
+              const num = parseFloat(timezoneInput);
+              if (!isNaN(num)) {
+                const clamped = clamp(num, -12, 14); // Standard timezone range
+                setTimezoneInput(String(clamped));
+                setForm(f => ({ ...f, timezone: clamped }));
+              } else {
+                setTimezoneInput(String(form.timezone)); // Revert on invalid input
+              }
+            }}
+            inputMode="decimal"
+            className={`w-full p-2.5 sm:p-3 bg-white border rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base ${
+              errors.timezone
+                ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
+            }`}
             disabled={disabled}
             required
           />
+          {errors.timezone && <p className="text-red-500 text-xs mt-1">{errors.timezone}</p>}
           <p className="text-xs text-gray-500 mt-1">Use positive for East, negative for West of UTC</p>
         </div>
 
-        {/* Set Data Button */}
-        <div className="pt-2 sm:pt-4">
+        {/* Action Buttons */}
+        <div className="pt-2 sm:pt-4 space-y-2">
           <button
             type="button"
-            className="w-full py-2.5 sm:py-3 px-4 sm:px-6 bg-gradient-to-r from-coffee-400 to-purple-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 btn-hover disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-sm sm:text-base"
-            onClick={() => onSetData(form)}
+            className="w-full py-2.5 sm:py-3 px-4 sm:px-6 bg-gradient-to-r from-amber-400 to-purple-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-sm sm:text-base"
+            onClick={handleSubmit}
             disabled={disabled}
           >
             <span className="flex items-center justify-center">
@@ -201,13 +415,22 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
               Set Birth Details
             </span>
           </button>
+          
+          <button
+            type="button"
+            className="w-full py-2 sm:py-2.5 px-4 sm:px-6 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-all duration-200 text-sm sm:text-base"
+            onClick={handlePreview}
+            disabled={disabled}
+          >
+            Preview Data
+          </button>
         </div>
 
         {/* Preview Section */}
         {preview && (
           <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-50 rounded-xl border border-gray-200">
             <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Data Preview</h4>
-            <pre className="bg-white p-2 sm:p-3 rounded-lg text-xs text-gray-600 overflow-auto">{preview}</pre>
+            <pre className="bg-white p-2 sm:p-3 rounded-lg text-xs text-gray-600 overflow-auto whitespace-pre-wrap">{preview}</pre>
           </div>
         )}
       </div>
