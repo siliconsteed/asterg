@@ -8,6 +8,7 @@ interface UserDetails {
   lat: number;
   lon: number;
   timezone: number;
+  ianaTimezone?: string;
 }
 
 interface UserDetailsFormProps {
@@ -23,23 +24,19 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
     pob: '',
     lat: 0,
     lon: 0,
-    timezone: 5.5, // Default to IST
+    timezone: 5.5, // Will be auto-filled after place selection
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Manage lat/lon as text for better UX (allow '-' and partial input),
-  // then sync to numeric state when valid
-  const [latInput, setLatInput] = useState<string>('0');
-  const [lonInput, setLonInput] = useState<string>('0');
-  const [timezoneInput, setTimezoneInput] = useState<string>('5.5');
-
-  // Sync text inputs from numeric form state on mount/whenever form changes externally
-  useEffect(() => {
-    setLatInput(String(form.lat));
-    setLonInput(String(form.lon));
-    setTimezoneInput(String(form.timezone));
-  }, [form.lat, form.lon, form.timezone]);
+  // Autocomplete state for Place of Birth
+  const [pobQuery, setPobQuery] = useState<string>('');
+  const [suggestions, setSuggestions] = useState<Array<{ name: string; lat: number; lon: number }>>([]);
+  const [openSuggest, setOpenSuggest] = useState<boolean>(false);
+  const [highlighted, setHighlighted] = useState<number>(-1);
+  const [loadingSuggest, setLoadingSuggest] = useState<boolean>(false);
+  const listRef = React.useRef<HTMLUListElement | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -56,6 +53,9 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
         case 'dob':
           return { ...f, dob: value };
         case 'pob':
+          // Update query and show suggestions
+          setPobQuery(value);
+          setOpenSuggest(value.trim().length > 1);
           return { ...f, pob: value };
         default:
           return f;
@@ -63,60 +63,84 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
     });
   };
 
-  // Helpers for validating and formatting coordinates
-  const coordPattern = /^-?\d{0,3}(?:\.(\d{0,6})?)?$/; // up to 3 integer digits, up to 6 decimals
-
-  const formatTo3dp = (num: number) => {
-    return Number.isFinite(num) ? Number(num.toFixed(3)) : num;
-  };
-
-  const clamp = (num: number, min: number, max: number) => Math.min(Math.max(num, min), max);
-
-  const onLatChange = (value: string) => {
-    // Allow empty or just '-' during typing
-    if (value === '' || value === '-') {
-      setLatInput(value);
-      return;
-    }
-    if (coordPattern.test(value)) {
-      setLatInput(value);
-    }
-  };
-
-  const onLonChange = (value: string) => {
-    if (value === '' || value === '-') {
-      setLonInput(value);
-      return;
-    }
-    if (coordPattern.test(value)) {
-      setLonInput(value);
-    }
-  };
-
-  const onLatBlur = () => {
-    const num = parseFloat(latInput);
-    if (!isNaN(num)) {
-      const clamped = clamp(num, -90, 90);
-      const rounded = formatTo3dp(clamped);
-      setLatInput(String(rounded));
-      setForm(f => ({ ...f, lat: rounded }));
+  // Debounced fetch for place suggestions
+  useEffect(() => {
+    let timer: any;
+    if (openSuggest && pobQuery.trim().length > 1) {
+      setLoadingSuggest(true);
+      timer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/places?q=${encodeURIComponent(pobQuery.trim())}`);
+          const data = await res.json();
+          setSuggestions(data.results || []);
+        } catch (e) {
+          setSuggestions([]);
+        } finally {
+          setLoadingSuggest(false);
+        }
+      }, 350);
     } else {
-      // reset to previous valid form value
-      setLatInput(String(form.lat));
+      setSuggestions([]);
+    }
+    return () => clearTimeout(timer);
+  }, [pobQuery, openSuggest]);
+
+  // Click-away to close suggestions
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!openSuggest) return;
+      const target = e.target as Node;
+      if (
+        inputRef.current && !inputRef.current.contains(target) &&
+        listRef.current && !listRef.current.contains(target)
+      ) {
+        setOpenSuggest(false);
+        setHighlighted(-1);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [openSuggest]);
+
+  const selectPlace = async (item: { name: string; lat: number; lon: number }) => {
+    setForm(f => ({ ...f, pob: item.name, lat: item.lat, lon: item.lon }));
+    setPobQuery(item.name);
+    setOpenSuggest(false);
+    setHighlighted(-1);
+    // Fetch timezone for DOB if available
+    if (form.dob) {
+      try {
+        const tzRes = await fetch(`/api/timezone?lat=${item.lat}&lon=${item.lon}&date=${encodeURIComponent(form.dob)}`);
+        const tzJson = await tzRes.json();
+        setForm(f => ({
+          ...f,
+          timezone: typeof tzJson?.timezoneNumber === 'number' ? tzJson.timezoneNumber : f.timezone,
+          ianaTimezone: tzJson?.ianaTimezone || f.ianaTimezone,
+        }));
+      } catch {}
     }
   };
 
-  const onLonBlur = () => {
-    const num = parseFloat(lonInput);
-    if (!isNaN(num)) {
-      const clamped = clamp(num, -180, 180);
-      const rounded = formatTo3dp(clamped);
-      setLonInput(String(rounded));
-      setForm(f => ({ ...f, lon: rounded }));
-    } else {
-      setLonInput(String(form.lon));
-    }
-  };
+  // Recompute timezone when DOB changes and we already have lat/lon
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!form.dob || !Number.isFinite(form.lat) || !Number.isFinite(form.lon)) return;
+      try {
+        const tzRes = await fetch(`/api/timezone?lat=${form.lat}&lon=${form.lon}&date=${encodeURIComponent(form.dob)}`);
+        const tzJson = await tzRes.json();
+        if (!cancelled) {
+          setForm(f => ({
+            ...f,
+            timezone: typeof tzJson?.timezoneNumber === 'number' ? tzJson.timezoneNumber : f.timezone,
+            ianaTimezone: tzJson?.ianaTimezone || f.ianaTimezone,
+          }));
+        }
+      } catch {}
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [form.dob]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -138,17 +162,12 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
     if (!form.pob) {
       newErrors.pob = 'Place of birth is required';
     }
-
-    if (isNaN(parseFloat(latInput)) || latInput === '') {
-      newErrors.lat = 'Valid latitude is required';
+    // Ensure auto-derived fields are present after selection
+    if (!Number.isFinite(form.lat) || !Number.isFinite(form.lon)) {
+      newErrors.pob = newErrors.pob || 'Please select a place from the dropdown suggestions';
     }
-
-    if (isNaN(parseFloat(lonInput)) || lonInput === '') {
-      newErrors.lon = 'Valid longitude is required';
-    }
-
-    if (isNaN(parseFloat(timezoneInput)) || timezoneInput === '') {
-      newErrors.timezone = 'Valid timezone is required';
+    if (!Number.isFinite(form.timezone)) {
+      newErrors.pob = newErrors.pob || 'Timezone could not be derived; please reselect your place';
     }
 
     setErrors(newErrors);
@@ -157,12 +176,7 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
 
   const handleSubmit = () => {
     if (validateForm()) {
-      // Ensure latest lat/lon are synchronized and valid before submit
-      const latNum = formatTo3dp(clamp(parseFloat(latInput), -90, 90));
-      const lonNum = formatTo3dp(clamp(parseFloat(lonInput), -180, 180));
-      const timezoneNum = parseFloat(timezoneInput);
-      const details: UserDetails = { ...form, lat: latNum, lon: lonNum, timezone: timezoneNum };
-      onSetData(details);
+      onSetData(form);
     }
   };
 
@@ -274,15 +288,35 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
           {errors.tob && <p className="text-red-500 text-xs mt-1">{errors.tob}</p>}
         </div>
 
-        {/* Place of Birth Field */}
-        <div className="group">
+        {/* Place of Birth Field with Autocomplete */}
+        <div className="group relative">
           <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Place of Birth</label>
           <input
+            ref={inputRef}
             type="text"
             name="pob"
-            placeholder="e.g., New York, NY, USA"
+            placeholder="Type to search city (e.g Paris, France)"
             value={form.pob}
             onChange={handleChange}
+            onFocus={() => setOpenSuggest(form.pob.trim().length > 1)}
+            onKeyDown={(e) => {
+              if (!openSuggest) return;
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setHighlighted(h => Math.min(h + 1, suggestions.length - 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setHighlighted(h => Math.max(h - 1, 0));
+              } else if (e.key === 'Enter') {
+                if (highlighted >= 0 && highlighted < suggestions.length) {
+                  e.preventDefault();
+                  selectPlace(suggestions[highlighted]);
+                }
+              } else if (e.key === 'Escape') {
+                setOpenSuggest(false);
+                setHighlighted(-1);
+              }
+            }}
             className={`w-full p-2.5 sm:p-3 bg-white border rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base ${
               errors.pob 
                 ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
@@ -290,106 +324,45 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
             }`}
             disabled={disabled}
             required
+            aria-autocomplete="list"
+            aria-expanded={openSuggest}
+            aria-controls="pob-suggestions"
           />
+          {openSuggest && (
+            <ul
+              id="pob-suggestions"
+              ref={listRef}
+              className="absolute z-20 mt-1 w-full max-h-56 overflow-auto bg-white border border-gray-200 rounded-xl shadow-lg"
+              role="listbox"
+            >
+              {loadingSuggest && (
+                <li className="px-3 py-2 text-gray-500 text-sm">Searching...</li>
+              )}
+              {!loadingSuggest && suggestions.length === 0 && (
+                <li className="px-3 py-2 text-gray-500 text-sm">No results</li>
+              )}
+              {!loadingSuggest && suggestions.map((s, idx) => (
+                <li
+                  key={`${s.name}-${idx}`}
+                  role="option"
+                  aria-selected={idx === highlighted}
+                  onMouseEnter={() => setHighlighted(idx)}
+                  onMouseDown={(e) => {
+                    // prevent input blur before click handler
+                    e.preventDefault();
+                    selectPlace(s);
+                  }}
+                  className={`px-3 py-2 cursor-pointer text-sm ${idx === highlighted ? 'bg-amber-50' : ''}`}
+                >
+                  {s.name}
+                </li>
+              ))}
+            </ul>
+          )}
           {errors.pob && <p className="text-red-500 text-xs mt-1">{errors.pob}</p>}
         </div>
 
-        {/* Coordinates Fields */}
-        <div className="group">
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Coordinates</label>
-          <div className="flex gap-2 sm:gap-3">
-            <div className="flex-1">
-              <input
-                type="text"
-                name="lat"
-                placeholder="Latitude"
-                value={latInput}
-                onChange={(e) => {
-                  onLatChange(e.target.value);
-                  if (errors.lat) {
-                    setErrors(prev => ({ ...prev, lat: '' }));
-                  }
-                }}
-                onBlur={onLatBlur}
-                inputMode="decimal"
-                className={`w-full p-2.5 sm:p-3 bg-white border rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base ${
-                  errors.lat 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
-                }`}
-                disabled={disabled}
-                required
-              />
-              {errors.lat && <p className="text-red-500 text-xs mt-1">{errors.lat}</p>}
-            </div>
-            <div className="flex-1">
-              <input
-                type="text"
-                name="lon"
-                placeholder="Longitude"
-                value={lonInput}
-                onChange={(e) => {
-                  onLonChange(e.target.value);
-                  if (errors.lon) {
-                    setErrors(prev => ({ ...prev, lon: '' }));
-                  }
-                }}
-                onBlur={onLonBlur}
-                inputMode="decimal"
-                className={`w-full p-2.5 sm:p-3 bg-white border rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base ${
-                  errors.lon 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
-                }`}
-                disabled={disabled}
-                required
-              />
-              {errors.lon && <p className="text-red-500 text-xs mt-1">{errors.lon}</p>}
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 mt-1">Find coordinates at <a href="https://www.latlong.net/" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:text-amber-700">latlong.net</a></p>
-        </div>
-
-        {/* Timezone Field */}
-        <div className="group">
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Timezone</label>
-          <input
-            type="text"
-            name="timezone"
-            placeholder="e.g., 5.5 for IST, -7 for PDT"
-            value={timezoneInput}
-            onChange={(e) => {
-              const value = e.target.value;
-              // Allow typing of numbers, one decimal, and a leading minus sign
-              if (/^-?\d*\.?\d*$/.test(value)) {
-                setTimezoneInput(value);
-              }
-              if (errors.timezone) {
-                setErrors(prev => ({ ...prev, timezone: '' }));
-              }
-            }}
-            onBlur={() => {
-              const num = parseFloat(timezoneInput);
-              if (!isNaN(num)) {
-                const clamped = clamp(num, -12, 14); // Standard timezone range
-                setTimezoneInput(String(clamped));
-                setForm(f => ({ ...f, timezone: clamped }));
-              } else {
-                setTimezoneInput(String(form.timezone)); // Revert on invalid input
-              }
-            }}
-            inputMode="decimal"
-            className={`w-full p-2.5 sm:p-3 bg-white border rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base ${
-              errors.timezone
-                ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                : 'border-gray-300 focus:ring-amber-500 focus:border-amber-500'
-            }`}
-            disabled={disabled}
-            required
-          />
-          {errors.timezone && <p className="text-red-500 text-xs mt-1">{errors.timezone}</p>}
-          <p className="text-xs text-gray-500 mt-1">Use positive for East, negative for West of UTC</p>
-        </div>
+        {/* Coordinates and Timezone are auto-derived; no manual inputs shown */}
 
         {/* Action Buttons */}
         <div className="pt-2 sm:pt-4 space-y-2">

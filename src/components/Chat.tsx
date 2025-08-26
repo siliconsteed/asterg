@@ -37,6 +37,8 @@ interface UserDetails {
   lat: number;
   lon: number;
   timezone: number;
+  // Optional IANA timezone for DST-aware computation (e.g., "America/New_York")
+  ianaTimezone?: string;
 }
 
 // Validation results interface
@@ -153,6 +155,54 @@ const disableRazorpay: boolean = true; // true => Razorpay disabled
 
 // Set to true to disable PayPal, false to enable it
 const disablePaypal: boolean = true; // true => PayPal disabled
+
+// Timezone behavior toggle
+// If true: derive timezone number (-12..14) from selected city's IANA timezone on the DOB (DST-aware)
+// If false: use the numeric timezone provided in the user details as-is
+const useDSTFromCityDOB: boolean = false;
+
+// Compute offset (in hours) for a given UTC date at local wall-time using an IANA timezone.
+// Strategy: use Intl.DateTimeFormat to materialize the local wall-time and reconstruct a UTC timestamp.
+function getTimeZoneOffsetHoursOnDate(dob: string, timeZone: string): number {
+  try {
+    // Parse YYYY-MM-DD
+    const [y, m, d] = dob.split('-').map(Number);
+    if (!y || !m || !d) return NaN;
+
+    // Use 12:00 local time to avoid DST edge cases at midnight
+    const dateUtcNoon = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    const parts = dtf.formatToParts(dateUtcNoon);
+    const map = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    const asUTC = Date.UTC(
+      Number(map.year),
+      Number(map.month) - 1,
+      Number(map.day),
+      Number(map.hour),
+      Number(map.minute),
+      Number(map.second)
+    );
+
+    // Difference between local wall-time in the target zone and the original UTC time
+    const offsetMinutes = (asUTC - dateUtcNoon.getTime()) / 60000;
+    // Positive east of UTC
+    return offsetMinutes / 60;
+  } catch (e) {
+    console.warn('Failed to compute timezone offset from IANA timezone:', e);
+    return NaN;
+  }
+}
 
 export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabled }: ChatProps) {
   // Payment script loading states
@@ -530,7 +580,13 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         // First-time chat - extract user details and get astrology data
         const [year, month, date] = userDetails.dob.split('-').map(Number);
         const [hours, minutes] = userDetails.tob.split(':').map(Number);
-        const { lat, lon, timezone } = userDetails;
+        const { lat, lon, timezone, ianaTimezone } = userDetails;
+        // Decide which timezone number to send
+        const timezoneToSend = (useDSTFromCityDOB && ianaTimezone)
+          ? (Number.isFinite(getTimeZoneOffsetHoursOnDate(userDetails.dob, ianaTimezone))
+              ? getTimeZoneOffsetHoursOnDate(userDetails.dob, ianaTimezone)
+              : timezone)
+          : timezone;
         
         // Prepare the payload for the astrology API
         const payload = {
@@ -541,7 +597,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
           minutes,
           latitude: lat,
           longitude: lon,
-          timezone
+          timezone: timezoneToSend
         };
         
         setMessages((prev) => [
@@ -697,7 +753,11 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         minutes: parseInt(minutesStr, 10),
         latitude: lat,
         longitude: lon,
-        timezone,
+        timezone: (useDSTFromCityDOB && userDetails.ianaTimezone)
+          ? (Number.isFinite(getTimeZoneOffsetHoursOnDate(dob, userDetails.ianaTimezone!))
+              ? getTimeZoneOffsetHoursOnDate(dob, userDetails.ianaTimezone!)
+              : timezone)
+          : timezone,
       };
 
       // Call the astrology API
