@@ -144,14 +144,15 @@ interface ChatProps {
   disabled?: boolean;
 }
 
-// Set to 0 to bypass payment flow, 1 to show payment options
-const skipPayment: number = 1; // When 0, payment step is skipped
+// Payment feature flags (booleans for clarity)
+// Set to true to bypass payment flow, false to show payment options
+const skipPayment: boolean = true; // true => skip payment and go directly to chat
 
-// Set to 1 to disable Razorpay, 0 to enable it
-const disableRazorpay: number = 0; // When 1, Razorpay payment option is disabled
+// Set to true to disable Razorpay, false to enable it
+const disableRazorpay: boolean = true; // true => Razorpay disabled
 
-// Set to 1 to disable PayPal, 0 to enable it
-const disablePaypal: number = 0; // When 1, PayPal payment option is disabled
+// Set to true to disable PayPal, false to enable it
+const disablePaypal: boolean = true; // true => PayPal disabled
 
 export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabled }: ChatProps) {
   // Payment script loading states
@@ -276,7 +277,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
 
   // Handle user confirmation of data
   const handleConfirmData = () => {
-    if (skipPayment === 0) {
+    if (skipPayment) {
       // Skip payment and go directly to chat
       setShowChatSection(true);
       // Timer will start when user sends first message
@@ -288,7 +289,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
   
   // With Razorpay disabled, auto-select PayPal
   useEffect(() => {
-    if (showPaymentSection && (disableRazorpay === 1 || !razorpayLoaded)) {
+    if (showPaymentSection && (disableRazorpay || !razorpayLoaded)) {
       setSelectedPaymentMethod('paypal');
     }
   }, [showPaymentSection, disableRazorpay, razorpayLoaded]);
@@ -328,7 +329,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
   
   // Process payment based on selected payment method
   const processPayment = () => {
-    if (selectedPaymentMethod === 'paypal' && paypalLoaded && disablePaypal === 0) {
+    if (selectedPaymentMethod === 'paypal' && paypalLoaded && !disablePaypal) {
       // Render PayPal button in the paypal-button-container
       initializePayPalButton(
         'paypal-button-container', 
@@ -336,7 +337,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         handlePaymentComplete,
         handlePaymentError
       );
-    } else if (selectedPaymentMethod === 'razorpay' && disableRazorpay === 0) {
+    } else if (selectedPaymentMethod === 'razorpay' && !disableRazorpay) {
       // Check if Razorpay is properly loaded
       if (!window.Razorpay) {
         console.error('Razorpay not available. Ensure the script is loaded.');
@@ -782,14 +783,14 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
   return (
     <div className="flex flex-col flex-grow p-3 sm:p-6 glass rounded-2xl shadow-2xl border border-white/20">
       {/* Dynamic loading of payment scripts */}
-      {disablePaypal === 0 && (
+      {!disablePaypal && (
         <Script
           src="https://www.paypal.com/sdk/js?client-id=test&currency=USD"
           onLoad={handlePayPalScriptLoad}
           onError={() => console.error('Failed to load PayPal script')}
         />
       )}
-      {disableRazorpay === 0 && (
+      {!disableRazorpay && (
         <Script 
           src="https://checkout.razorpay.com/v1/checkout.js" 
           strategy="afterInteractive" 
@@ -904,7 +905,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
               <p className="text-xs text-gray-500 mt-2 font-mozilla-headline">One-time payment for 10 minutes of chat access</p>
             </div>
             <div className="space-y-4 mb-6">
-              {disablePaypal === 0 && (
+              {!disablePaypal && (
                 <div
                   tabIndex={0}
                   role="button"
@@ -922,7 +923,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                   )}
                 </div>
               )}
-              {disableRazorpay === 0 && (
+              {!disableRazorpay && (
                 <div
                   tabIndex={0}
                   role="button"
