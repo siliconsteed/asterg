@@ -26,7 +26,6 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
     timezone: 5.5, // Default to IST
   });
 
-  const [preview, setPreview] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Manage lat/lon as text for better UX (allow '-' and partial input),
@@ -165,14 +164,6 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
       const details: UserDetails = { ...form, lat: latNum, lon: lonNum, timezone: timezoneNum };
       onSetData(details);
     }
-  };
-
-  const handlePreview = () => {
-    const latNum = formatTo3dp(clamp(parseFloat(latInput), -90, 90));
-    const lonNum = formatTo3dp(clamp(parseFloat(lonInput), -180, 180));
-    const timezoneNum = parseFloat(timezoneInput);
-    const details: UserDetails = { ...form, lat: latNum, lon: lonNum, timezone: timezoneNum };
-    setPreview(JSON.stringify(details, null, 2));
   };
 
   return (
@@ -416,23 +407,9 @@ export default function UserDetailsForm({ onSetData, disabled }: UserDetailsForm
             </span>
           </button>
           
-          <button
-            type="button"
-            className="w-full py-2 sm:py-2.5 px-4 sm:px-6 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-all duration-200 text-sm sm:text-base"
-            onClick={handlePreview}
-            disabled={disabled}
-          >
-            Preview Data
-          </button>
-        </div>
 
-        {/* Preview Section */}
-        {preview && (
-          <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-50 rounded-xl border border-gray-200">
-            <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Data Preview</h4>
-            <pre className="bg-white p-2 sm:p-3 rounded-lg text-xs text-gray-600 overflow-auto whitespace-pre-wrap">{preview}</pre>
-          </div>
-        )}
+        </div>
+        
       </div>
     </div>
   );
