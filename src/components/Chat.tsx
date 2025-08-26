@@ -681,7 +681,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       // Show a message that astrology data is being fetched
       setMessages((prev) => [...prev, {
         id: Date.now().toString(),
-        content: 'Fetching astrological insights... This may take upto 2 minutes. ',
+        content: 'Fetching astrological insights... This may take upto 30 seconds. ',
         sender: 'system',
         timestamp: new Date(),
       }]);
