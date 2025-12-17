@@ -15,18 +15,32 @@ export async function GET(request: Request) {
     return NextResponse.json({ results: cache.get(cacheKey) });
   }
 
+  // Guard: Nominatim generally expects at least 2 characters to avoid overly broad queries
+  if (q.length < 2) {
+    return NextResponse.json({ results: [] });
+  }
+
   // Nominatim policy: include a descriptive User-Agent and referer
+  // Configure via environment if available
+  const defaultContact = process.env.CONTACT_EMAIL ? ` (contact: ${process.env.CONTACT_EMAIL})` : '';
+  const userAgent = process.env.NOMINATIM_USER_AGENT || `AIstroGPT/1.0${defaultContact}`;
+  const acceptLanguage = (typeof request.headers.get === 'function' && (request.headers.get('accept-language') || 'en')) || 'en';
+  const referer = (typeof request.headers.get === 'function' && (request.headers.get('referer') || request.headers.get('origin'))) || undefined;
+
   const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=10&q=${encodeURIComponent(q)}`;
+
   try {
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'AIstroGPT/1.0 (contact: example@example.com)',
-        'Accept-Language': 'en',
+        'User-Agent': userAgent,
+        'Accept-Language': acceptLanguage,
+        ...(referer ? { Referer: referer } : {}),
       },
       next: { revalidate: 60 },
     });
 
     if (!res.ok) {
+      // Surface upstream status; still keep shape
       return NextResponse.json({ results: [] }, { status: res.status });
     }
 
@@ -34,7 +48,8 @@ export async function GET(request: Request) {
 
     const results = (json as any[]).slice(0, 10).map((item) => {
       const addr = item.address || {};
-      const parts = [addr.city || addr.town || addr.village || addr.hamlet, addr.state, addr.country]
+      const locality = addr.city || addr.town || addr.village || addr.hamlet || addr.suburb || addr.county;
+      const parts = [locality, addr.state, addr.country]
         .filter(Boolean)
         .join(', ');
       const name: string = parts || item.display_name;
