@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ChatMessage } from '@/types';
 import { ClockIcon, XMarkIcon, CreditCardIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
-//import { supabase } from '@/lib/supabaseClient'; // Added for Supabase integration
+import { supabase } from '@/lib/supabaseClient'; // Added for Supabase integration
 import Script from 'next/script';
 import { initializePayPalButton } from '@/lib/paypalClient';
 import { initializeRazorpayCheckout } from '@/lib/razorpayClient';
@@ -149,7 +149,7 @@ interface ChatProps {
 
 // Payment feature flags (booleans for clarity)
 // Set to true to bypass payment flow, false to show payment options
-const skipPayment: boolean = true; // true => skip payment and go directly to chat
+const skipPayment: boolean = false; // true => skip payment and go directly to chat
 
 // Set to true to disable Razorpay, false to enable it
 const disableRazorpay: boolean = false; // true => Razorpay disabled
