@@ -1014,11 +1014,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                   <p className="text-xs text-gray-500 mt-2 font-mozilla-headline">
                     One-time payment for 10 minutes of chat access
                   </p>
-                  {userLocation && (
-                    <p className="text-xs text-coffee-600 mt-1 font-mozilla-headline">
-                      Location: {userLocation.countryName}
-                    </p>
-                  )}
+
                 </>
               )}
             </div>
