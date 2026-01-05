@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient'; // Added for Supabase integrati
 import Script from 'next/script';
 import { initializePayPalButton } from '@/lib/paypalClient';
 import { initializeRazorpayCheckout } from '@/lib/razorpayClient';
+import { detectUserCountry, type GeolocationResult } from '@/lib/geolocation';
 
 // Add TypeScript declaration for global Razorpay object
 declare global {
@@ -54,87 +55,87 @@ const validateUserDetails = (details: UserDetails | undefined): ValidationResult
   if (!details) {
     return { isValid: false, errorMessage: 'User details are not available.' };
   }
-  
+
   // Destructure for easier access
   const { email, dob, tob, pob, lat, lon, timezone } = details;
-  
+
   // Check all required fields are present
   if (!email || !dob || !tob || !pob || lat === undefined || lon === undefined || timezone === undefined) {
-    return { 
-      isValid: false, 
-      errorMessage: 'Please fill in all required fields (Email, Date of Birth, Time of Birth, Place of Birth, Coordinates).' 
+    return {
+      isValid: false,
+      errorMessage: 'Please fill in all required fields (Email, Date of Birth, Time of Birth, Place of Birth, Coordinates).'
     };
   }
-  
+
   // Validate email format using regex
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     return { isValid: false, errorMessage: 'Please enter a valid email address.' };
   }
-  
+
   // Validate date format and values
   try {
     const [yearStr, monthStr, dateStr] = dob.replace(/-/g, '/').split('/');
     const year = parseInt(yearStr, 10);
     const month = parseInt(monthStr, 10);
     const date = parseInt(dateStr, 10);
-    
-    if (isNaN(year) || isNaN(month) || isNaN(date) || String(yearStr).length !== 4 || 
-        month < 1 || month > 12 || date < 1 || date > 31) {
-      return { 
-        isValid: false, 
-        errorMessage: `Invalid Date of Birth format. Please use YYYY/MM/DD or YYYY-MM-DD format. Received: '${dob}'` 
+
+    if (isNaN(year) || isNaN(month) || isNaN(date) || String(yearStr).length !== 4 ||
+      month < 1 || month > 12 || date < 1 || date > 31) {
+      return {
+        isValid: false,
+        errorMessage: `Invalid Date of Birth format. Please use YYYY/MM/DD or YYYY-MM-DD format. Received: '${dob}'`
       };
     }
-    
+
     // Additional date validation (e.g., February having max 29 days in leap years)
     const maxDaysInMonth = new Date(year, month, 0).getDate();
     if (date > maxDaysInMonth) {
-      return { 
-        isValid: false, 
-        errorMessage: `Invalid date. ${month}/${year} has only ${maxDaysInMonth} days.` 
+      return {
+        isValid: false,
+        errorMessage: `Invalid date. ${month}/${year} has only ${maxDaysInMonth} days.`
       };
     }
   } catch (error) {
-    return { 
-      isValid: false, 
-      errorMessage: `Invalid Date of Birth format. Please use YYYY/MM/DD or YYYY-MM-DD format. Received: '${dob}'` 
+    return {
+      isValid: false,
+      errorMessage: `Invalid Date of Birth format. Please use YYYY/MM/DD or YYYY-MM-DD format. Received: '${dob}'`
     };
   }
-  
+
   // Validate time format and values
   try {
     const [hoursStr, minutesStr] = tob.split(':');
     const hours = parseInt(hoursStr, 10);
     const minutes = parseInt(minutesStr, 10);
-    
+
     if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-      return { 
-        isValid: false, 
-        errorMessage: `Invalid Time of Birth format. Please use HH:MM (24-hour) format. Received: '${tob}'` 
+      return {
+        isValid: false,
+        errorMessage: `Invalid Time of Birth format. Please use HH:MM (24-hour) format. Received: '${tob}'`
       };
     }
   } catch (error) {
-    return { 
-      isValid: false, 
-      errorMessage: `Invalid Time of Birth format. Please use HH:MM format. Received: '${tob}'` 
+    return {
+      isValid: false,
+      errorMessage: `Invalid Time of Birth format. Please use HH:MM format. Received: '${tob}'`
     };
   }
-  
+
   // Validate coordinates
   if (typeof lat !== 'number' || isNaN(lat) || lat < -90 || lat > 90) {
     return { isValid: false, errorMessage: 'Latitude must be a number between -90 and 90.' };
   }
-  
+
   if (typeof lon !== 'number' || isNaN(lon) || lon < -180 || lon > 180) {
     return { isValid: false, errorMessage: 'Longitude must be a number between -180 and 180.' };
   }
-  
+
   // Validate timezone (basic validation)
   if (typeof timezone !== 'number' || isNaN(timezone) || timezone < -12 || timezone > 14) {
     return { isValid: false, errorMessage: 'Timezone must be a number between -12 and 14.' };
   }
-  
+
   // All validations passed
   return { isValid: true };
 };
@@ -148,13 +149,13 @@ interface ChatProps {
 
 // Payment feature flags (booleans for clarity)
 // Set to true to bypass payment flow, false to show payment options
-const skipPayment: boolean = true; // true => skip payment and go directly to chat
+const skipPayment: boolean = false; // true => skip payment and go directly to chat
 
 // Set to true to disable Razorpay, false to enable it
-const disableRazorpay: boolean = true; // true => Razorpay disabled
+const disableRazorpay: boolean = false; // true => Razorpay disabled
 
 // Set to true to disable PayPal, false to enable it
-const disablePaypal: boolean = true; // true => PayPal disabled
+const disablePaypal: boolean = false; // true => PayPal disabled
 
 // Timezone behavior toggle
 // If true: derive timezone number (-12..14) from selected city's IANA timezone on the DOB (DST-aware)
@@ -209,13 +210,17 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false); // Loading state for payment processing
-  
+
+  // Geolocation states for dynamic pricing
+  const [userLocation, setUserLocation] = useState<GeolocationResult | null>(null);
+  const [locationLoading, setLocationLoading] = useState(true);
+
   // PayPal script loading handler
   const handlePayPalScriptLoad = () => {
     setPaypalLoaded(true);
     console.log('PayPal script loaded');
   };
-  
+
   // Razorpay script loading handler
   const handleRazorpayScriptLoad = () => {
     // Double check that Razorpay is actually available
@@ -227,25 +232,49 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       setRazorpayLoaded(false);
     }
   };
-  
+
   // Check periodically if Razorpay is available despite script loading issues
   useEffect(() => {
     // If already loaded, no need to check
     if (razorpayLoaded) return;
-    
+
     const checkRazorpay = () => {
       if (typeof window !== 'undefined' && window.Razorpay) {
         setRazorpayLoaded(true);
         console.log('Razorpay detected through periodic check');
       }
     };
-    
+
     // Check immediately and then every 2 seconds
     checkRazorpay();
     const interval = setInterval(checkRazorpay, 2000);
-    
+
     return () => clearInterval(interval);
   }, [razorpayLoaded]);
+
+  // Detect user's location on component mount for dynamic pricing
+  useEffect(() => {
+    const detectLocation = async () => {
+      setLocationLoading(true);
+      try {
+        const location = await detectUserCountry();
+        setUserLocation(location);
+        console.log('User location detected:', location);
+      } catch (error) {
+        console.error('Failed to detect location:', error);
+        // Fallback to non-India (PayPal)
+        setUserLocation({
+          countryCode: 'US',
+          countryName: 'Unknown',
+          isIndia: false,
+        });
+      } finally {
+        setLocationLoading(false);
+      }
+    };
+
+    detectLocation();
+  }, []);
 
   // State for validation errors and data confirmation
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -278,7 +307,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
 
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
+
   // Countdown timer states
   const [timerStarted, setTimerStarted] = useState(false);
   const [countdown, setCountdown] = useState(10 * 60); // 10 minutes in seconds
@@ -299,7 +328,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       onReturnToDetails?.();
       return false;
     }
-    
+
     const validation = validateUserDetails(userDetails);
     if (!validation.isValid) {
       setValidationError(validation.errorMessage || 'Invalid user details.');
@@ -307,7 +336,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       onReturnToDetails?.();
       return false;
     }
-    
+
     // If valid, clear error and prepare for confirmation
     setValidationError(null);
     return true;
@@ -336,14 +365,22 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       setShowPaymentSection(true);
     }
   };
-  
-  // With Razorpay disabled, auto-select PayPal
+
+  // Auto-select payment method based on user location
   useEffect(() => {
-    if (showPaymentSection && (disableRazorpay || !razorpayLoaded)) {
-      setSelectedPaymentMethod('paypal');
+    if (showPaymentSection && userLocation && !locationLoading) {
+      if (userLocation.isIndia) {
+        // India: Use Razorpay
+        setSelectedPaymentMethod('razorpay');
+        console.log('Auto-selected Razorpay for India');
+      } else {
+        // Non-India: Use PayPal
+        setSelectedPaymentMethod('paypal');
+        console.log('Auto-selected PayPal for', userLocation.countryName);
+      }
     }
-  }, [showPaymentSection, disableRazorpay, razorpayLoaded]);
-  
+  }, [showPaymentSection, userLocation, locationLoading]);
+
   // Handle payment completion
   const handlePaymentComplete = (details: any) => {
     console.log('Payment completed', details);
@@ -352,14 +389,14 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
     setShowChatSection(true);
     // Timer will start when user sends first message
   };
-  
+
   // Handle payment error
   const handlePaymentError = (error: any) => {
     console.error('Payment error:', error);
-    
+
     // Get a more specific error message if available
     let errorMessage = 'There was an error processing your payment.';
-    
+
     if (error instanceof Error) {
       errorMessage = `Payment failed: ${error.message}`;
       console.debug('Error details:', error);
@@ -369,20 +406,20 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       errorMessage = error.description || error.message || errorMessage;
       console.debug('Error object:', JSON.stringify(error));
     }
-    
+
     // Reset payment UI state
     setIsLoading(false);
-    
+
     // Show error to user
     alert(errorMessage + ' Please try again or choose a different payment method.');
   };
-  
+
   // Process payment based on selected payment method
   const processPayment = () => {
     if (selectedPaymentMethod === 'paypal' && paypalLoaded && !disablePaypal) {
       // Render PayPal button in the paypal-button-container
       initializePayPalButton(
-        'paypal-button-container', 
+        'paypal-button-container',
         4.99, // $4.99 USD
         handlePaymentComplete,
         handlePaymentError
@@ -394,15 +431,15 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         alert('Razorpay payment service is not available right now. Please try PayPal or try again later.');
         return;
       }
-      
+
       // Show loading indicator
       setIsLoading(true);
-      
+
       // Launch Razorpay checkout with user details if available
       try {
-        console.log('Initializing Razorpay checkout with 429 INR...');
+        console.log('Initializing Razorpay checkout with 99 INR...');
         initializeRazorpayCheckout(
-          429, // 429 INR
+          99, // 99 INR
           'INR',
           (response) => {
             console.log('Razorpay payment successful', response);
@@ -414,7 +451,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
             setIsLoading(false);
             handlePaymentError(error);
           },
-          userDetails ? { 
+          userDetails ? {
             email: userDetails.email,
             name: userDetails.email.split('@')[0], // Use part of email as name
             // You could add phone if you collect it
@@ -433,9 +470,9 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       }, 1500);
     }
   };
-  
-  
-  
+
+
+
   // Additional methods and handlers for chat functionality continue below...
 
   // Handle user cancellation of data confirmation
@@ -456,7 +493,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
   // Countdown timer effect
   useEffect(() => {
     let timerInterval: NodeJS.Timeout | null = null;
-    
+
     if (timerStarted && countdown > 0) {
       timerInterval = setInterval(() => {
         setCountdown(prevTime => {
@@ -470,7 +507,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         });
       }, 1000);
     }
-    
+
     return () => {
       if (timerInterval) clearInterval(timerInterval);
     };
@@ -511,7 +548,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
 
     setInput('');
     setIsTyping(true);
-    
+
     try {
       // If we have astrology data and a thread ID from previous calls
       if (astroData && threadId) {
@@ -524,9 +561,9 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
             userQuery: currentInput, // The user's message
           }),
         });
-        
+
         const assistantData = await assistantRes.json();
-        
+
         if (assistantRes.ok && assistantData.result) {
           // Add the assistant's response to the chat
           setMessages((prev) => [
@@ -565,7 +602,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         // If we don't have astrology data yet, we need to fetch it first
         if (!userDetails) {
           setMessages((prev) => [
-            ...prev, 
+            ...prev,
             {
               id: (Date.now() + 1).toString(),
               content: 'User details are required to process your query.',
@@ -576,7 +613,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
           setIsTyping(false);
           return;
         }
-        
+
         // First-time chat - extract user details and get astrology data
         const [year, month, date] = userDetails.dob.split('-').map(Number);
         const [hours, minutes] = userDetails.tob.split(':').map(Number);
@@ -584,10 +621,10 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         // Decide which timezone number to send
         const timezoneToSend = (useDSTFromCityDOB && ianaTimezone)
           ? (Number.isFinite(getTimeZoneOffsetHoursOnDate(userDetails.dob, ianaTimezone))
-              ? getTimeZoneOffsetHoursOnDate(userDetails.dob, ianaTimezone)
-              : timezone)
+            ? getTimeZoneOffsetHoursOnDate(userDetails.dob, ianaTimezone)
+            : timezone)
           : timezone;
-        
+
         // Prepare the payload for the astrology API
         const payload = {
           year,
@@ -599,9 +636,9 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
           longitude: lon,
           timezone: timezoneToSend
         };
-        
+
         setMessages((prev) => [
-          ...prev, 
+          ...prev,
           {
             id: (Date.now() + 1).toString(),
             content: 'Fetching your astrological data...',
@@ -609,22 +646,22 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
             timestamp: new Date()
           }
         ]);
-        
+
         // Call the astrology API to get chart data
         const res = await fetch('/api/astrology', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-        
+
         const data = await res.json();
-        
+
         if (!res.ok) {
           let errorMessage = 'Failed to fetch astrological data.';
           if (data.error) {
             errorMessage += ' ' + data.error;
           }
-          
+
           setMessages((prev) => [...prev, {
             id: (Date.now() + 2).toString(),
             content: errorMessage,
@@ -634,17 +671,17 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
           setIsTyping(false);
           return;
         }
-        
+
         // Store the astrology data for future messages
         setAstroData(data);
-        
+
         setMessages((prev) => [...prev, {
           id: (Date.now() + 3).toString(),
           content: 'Astrological data received. Processing your query...',
           sender: 'system' as 'system',
           timestamp: new Date(),
         }]);
-        
+
         // Now send both astrology data and user query to the assistant API
         try {
           const assistantRes = await fetch('/api/assistant', {
@@ -655,15 +692,15 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
               userQuery: currentInput, // The user's question/message
             }),
           });
-          
+
           const assistantData = await assistantRes.json();
-          
+
           if (assistantRes.ok) {
             // Save the thread ID if provided for future messages
             if (assistantData.threadId) {
               setThreadId(assistantData.threadId);
             }
-            
+
             // Add the assistant's response to the chat
             setMessages((prev) => [...prev, {
               id: (Date.now() + 4).toString(),
@@ -717,7 +754,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
 
     // Use the comprehensive validation function
     const validation = validateUserDetails(userDetails);
-    
+
     if (!validation.isValid) {
       setMessages((prev) => [...prev, {
         id: Date.now().toString(),
@@ -733,7 +770,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
 
     try {
       setIsTyping(true);
-      
+
       // Show a message that astrology data is being fetched
       setMessages((prev) => [...prev, {
         id: Date.now().toString(),
@@ -744,7 +781,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
 
       const [yearStr, monthStr, dateStr] = dob.replace(/-/g, '/').split('/');
       const [hoursStr, minutesStr] = tob.split(':');
-      
+
       const payload = {
         year: parseInt(yearStr, 10),
         month: parseInt(monthStr, 10),
@@ -755,8 +792,8 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         longitude: lon,
         timezone: (useDSTFromCityDOB && userDetails.ianaTimezone)
           ? (Number.isFinite(getTimeZoneOffsetHoursOnDate(dob, userDetails.ianaTimezone!))
-              ? getTimeZoneOffsetHoursOnDate(dob, userDetails.ianaTimezone!)
-              : timezone)
+            ? getTimeZoneOffsetHoursOnDate(dob, userDetails.ianaTimezone!)
+            : timezone)
           : timezone,
       };
 
@@ -779,7 +816,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       const astroDataResp = await astroRes.json();
       setAstroData(astroDataResp);
       localStorage.setItem('astroData', JSON.stringify(astroDataResp));
-      
+
       // Display confirmation that astrology data was fetched
       const astroConfirmationMsg = {
         id: Date.now().toString(),
@@ -787,7 +824,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         sender: 'system' as 'system',
         timestamp: new Date(),
       };
-      
+
       setMessages((prev) => [...prev, astroConfirmationMsg]);
 
       // Now send astrology data to the Assistant API endpoint for a test response
@@ -801,14 +838,14 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
       });
 
       const assistantData = await assistantRes.json();
-      
+
       if (assistantRes.ok && assistantData.result) {
         // Save the thread_id if one is returned
         if (assistantData.thread_id) {
           setThreadId(assistantData.thread_id);
           localStorage.setItem('threadId', assistantData.thread_id);
         }
-        
+
         // Display the AI assistant response
         setMessages((prev) => [...prev, {
           id: Date.now().toString(),
@@ -851,14 +888,14 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
         />
       )}
       {!disableRazorpay && (
-        <Script 
-          src="https://checkout.razorpay.com/v1/checkout.js" 
-          strategy="afterInteractive" 
+        <Script
+          src="https://checkout.razorpay.com/v1/checkout.js"
+          strategy="afterInteractive"
           onLoad={handleRazorpayScriptLoad}
           onError={() => {
             console.error('Failed to load Razorpay script');
             setRazorpayLoaded(false);
-          }} 
+          }}
         />
       )}
       <div className="flex items-center justify-between mb-3 sm:mb-4 p-3 sm:p-4 bg-white/90 backdrop-blur-sm border border-white/20 rounded-xl shadow-sm">
@@ -870,11 +907,11 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
           </div>
         )}
       </div>
-      
+
       {!showChatSection && !showPaymentSection ? (
         // Validation and confirmation UI
         <div className="flex-1 flex flex-col justify-center items-center">
-          
+
           {/* Validation error in red */}
           {validationError && (
             <div className="bg-red-50 border border-red-300 text-red-600 p-3 rounded-md w-full max-w-md mb-4">
@@ -889,59 +926,59 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
               </div>
             </div>
           )}
-          
+
           {!dataConfirmed ? (
             // Initial validation UI with Set Data button
-                      <div className="bg-white/90 p-4 sm:p-6 rounded-xl shadow-md w-full max-w-md">
-            <h3 className="font-semibold text-gray-800 mb-3 sm:mb-4 text-sm sm:text-base">Validate Your Information</h3>
-            <p className="text-gray-600 mb-3 sm:mb-4 text-xs sm:text-sm">Please validate your personal details before starting the chat.</p>
-            
-            <button
-              onClick={handleSetDataClick}
-              className="w-full py-2.5 sm:py-3 px-4 sm:px-6 bg-gradient-to-r from-coffee-400 to-purple-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 btn-hover text-sm sm:text-base"
-              disabled={disabled}
-            >
-              Confirm Data
-            </button>
+            <div className="bg-white/90 p-4 sm:p-6 rounded-xl shadow-md w-full max-w-md">
+              <h3 className="font-semibold text-gray-800 mb-3 sm:mb-4 text-sm sm:text-base">Validate Your Information</h3>
+              <p className="text-gray-600 mb-3 sm:mb-4 text-xs sm:text-sm">Please validate your personal details before starting the chat.</p>
+
+              <button
+                onClick={handleSetDataClick}
+                className="w-full py-2.5 sm:py-3 px-4 sm:px-6 bg-gradient-to-r from-coffee-400 to-purple-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 btn-hover text-sm sm:text-base"
+                disabled={disabled}
+              >
+                Confirm Data
+              </button>
             </div>
           ) : (
             // Confirmation UI
             <div className="bg-white/90 p-4 sm:p-6 rounded-xl shadow-md w-full max-w-md">
               <h3 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">Confirm Your Details</h3>
               <p className="text-gray-600 mb-3 sm:mb-4 text-xs sm:text-sm">Please review your information before starting the chat.</p>
-              
+
               {userDetails && (
                 <div className="bg-gray-50 p-3 sm:p-4 rounded-xl mb-3 sm:mb-4">
                   <div className="grid grid-cols-2 gap-y-1 sm:gap-y-2 text-xs sm:text-sm">
                     <div className="font-medium">Email:</div>
                     <div>{userDetails.email}</div>
-                    
+
                     <div className="font-medium">Date of Birth:</div>
                     <div>{userDetails.dob}</div>
-                    
+
                     <div className="font-medium">Time of Birth:</div>
                     <div>{userDetails.tob}</div>
-                    
+
                     <div className="font-medium">Place of Birth:</div>
                     <div>{userDetails.pob}</div>
-                    
+
                     <div className="font-medium">Coordinates:</div>
                     <div>{userDetails.lat}, {userDetails.lon}</div>
-                    
+
                     <div className="font-medium">Timezone:</div>
                     <div>UTC{userDetails.timezone >= 0 ? '+' : ''}{userDetails.timezone}</div>
                   </div>
                 </div>
               )}
-              
+
               <div className="flex justify-between gap-2">
-                <button 
+                <button
                   onClick={handleCancelConfirm}
                   className="py-2 px-3 sm:px-4 bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300 transition-colors text-xs sm:text-sm"
                 >
                   Back
                 </button>
-                <button 
+                <button
                   onClick={handleConfirmData}
                   className="py-2 px-3 sm:px-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:scale-105 text-xs sm:text-sm"
                 >
@@ -961,11 +998,33 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
             </div>
             <div className="bg-gray-50 p-5 rounded-2xl mb-6 flex flex-col items-center">
               <p className="text-base text-gray-700 mb-1 font-mozilla-headline">Access to AIstroGPT Chat</p>
-              <p className="text-2xl font-extrabold text-black font-mozilla-headline">4.99 USD</p>
-              <p className="text-xs text-gray-500 mt-2 font-mozilla-headline">One-time payment for 10 minutes of chat access</p>
+              {locationLoading ? (
+                <div className="flex items-center gap-2">
+                  <svg className="animate-spin h-5 w-5 text-coffee-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                  </svg>
+                  <p className="text-lg text-gray-600 font-mozilla-headline">Detecting location...</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-2xl font-extrabold text-black font-mozilla-headline">
+                    {userLocation?.isIndia ? '₹99' : '$4.99'}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2 font-mozilla-headline">
+                    One-time payment for 10 minutes of chat access
+                  </p>
+                  {userLocation && (
+                    <p className="text-xs text-coffee-600 mt-1 font-mozilla-headline">
+                      Location: {userLocation.countryName}
+                    </p>
+                  )}
+                </>
+              )}
             </div>
             <div className="space-y-4 mb-6">
-              {!disablePaypal && (
+              {/* Show PayPal only for non-India users */}
+              {!disablePaypal && userLocation && !userLocation.isIndia && (
                 <div
                   tabIndex={0}
                   role="button"
@@ -983,7 +1042,8 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                   )}
                 </div>
               )}
-              {!disableRazorpay && (
+              {/* Show Razorpay only for India users */}
+              {!disableRazorpay && userLocation && userLocation.isIndia && (
                 <div
                   tabIndex={0}
                   role="button"
@@ -1068,7 +1128,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                 </div>
               </div>
             ))}
-            
+
             {isTyping && (
               <div className="flex justify-start mb-4">
                 <div className="max-w-[75%] relative p-3 mb-2 rounded-xl shadow-md bg-slate-100 text-gray-900">
@@ -1081,7 +1141,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
             )}
           </div>
           <div ref={messagesEndRef} />
-          
+
           {/* Chat input form */}
           <form onSubmit={handleSubmit} className="flex items-center gap-2">
             <input
@@ -1093,10 +1153,10 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
               disabled={isTyping || !chatStarted}
             />
           </form>
-          
+
           {/* Footer with other controls */}
           <div className="flex items-center justify-between mt-3 sm:mt-4 gap-2">
-            { (
+            {(
               <button
                 onClick={() => {
                   if (!chatStarted) {

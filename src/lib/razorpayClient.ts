@@ -23,9 +23,9 @@ export const initializeRazorpayCheckout = (
         throw new Error('Razorpay SDK not loaded or blocked by browser extension');
       }
 
-      // Use fixed amount of 429 INR as requested
+      // Use the amount passed from the component
       // Note: Razorpay expects amount in paise (1 INR = 100 paise)
-      const displayAmount = 42900; // 429 INR in paise
+      const displayAmount = currency === 'INR' ? amount * 100 : amount * 100; // Convert to paise/cents
       
       // For testing, we don't need to generate an order ID - Razorpay will generate one for us
       // In production, order ID should come from your backend
