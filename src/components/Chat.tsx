@@ -149,7 +149,7 @@ interface ChatProps {
 
 // Payment feature flags (booleans for clarity)
 // Set to true to bypass payment flow, false to show payment options
-const skipPayment: boolean = false; // true => skip payment and go directly to chat
+const skipPayment: boolean = true; // true => skip payment and go directly to chat
 
 // Set to true to disable Razorpay, false to enable it
 const disableRazorpay: boolean = false; // true => Razorpay disabled
