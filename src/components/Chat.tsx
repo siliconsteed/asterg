@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ChatMessage } from '@/types';
-import { ClockIcon, XMarkIcon, CreditCardIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, XMarkIcon, CreditCardIcon } from '@heroicons/react/24/outline';
+import { PaperAirplaneIcon } from '@heroicons/react/24/solid';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient'; // Added for Supabase integration
 import Script from 'next/script';
@@ -494,10 +495,10 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
   useEffect(() => {
     let timerInterval: NodeJS.Timeout | null = null;
 
-    if (timerStarted && countdown > 0) {
+    if (timerStarted) {
       timerInterval = setInterval(() => {
         setCountdown(prevTime => {
-          if (prevTime <= 1) {
+          if (prevTime <= 0) {
             clearInterval(timerInterval!);
             // Redirect to home page when timer reaches zero
             router.push('/');
@@ -511,17 +512,15 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
     return () => {
       if (timerInterval) clearInterval(timerInterval);
     };
-  }, [timerStarted, countdown, router]);
+  }, [timerStarted, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || disabled) return;
 
-    if (!chatStarted) {
-      setChatStarted(true);
-      // Start countdown timer when user sends their first message
-      setTimerStarted(true);
-    }
+    // Start countdown timer when user sends their first message
+    if (!timerStarted) setTimerStarted(true);
+    if (!chatStarted) setChatStarted(true);
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -1152,10 +1151,10 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
               <button
                 type="submit"
                 disabled={isTyping || !chatStarted || !input.trim()}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-coffee-600 hover:text-coffee-700 disabled:text-gray-300 transition-colors"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-coffee-600 hover:text-coffee-700 disabled:text-gray-300 transition-all duration-200 transform hover:scale-110 active:scale-95"
                 title="Send Message"
               >
-                <PaperAirplaneIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                <PaperAirplaneIcon className="w-6 h-6 sm:w-7 sm:h-7 -rotate-12" />
               </button>
             </div>
           </form>
@@ -1165,9 +1164,7 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
             {(
               <button
                 onClick={() => {
-                  if (!chatStarted) {
-                    setChatStarted(true);
-                  }
+                  setChatStarted(true);
                   handleTestAstroApi();
                 }}
                 className="px-3 sm:px-4 py-2 bg-gradient-to-r from-coffee-500 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 font-medium text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
