@@ -1145,23 +1145,22 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                 value={input}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
                 placeholder={!chatStarted ? 'Click Start/Send to begin...' : (isTyping ? 'AIstroGPT is thinking...' : 'Type your message...')}
-                className="w-full p-2.5 pr-12 sm:p-3 sm:pr-14 bg-white border border-gray-300 rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 text-sm sm:text-base"
+                className="w-full p-2.5 pr-14 sm:p-3 sm:pr-16 bg-white border border-gray-300 rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 text-sm sm:text-base"
                 disabled={isTyping || !chatStarted}
               />
               <button
                 type="submit"
                 disabled={isTyping || !chatStarted || !input.trim()}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-coffee-600 hover:text-coffee-700 disabled:text-gray-300 transition-all duration-200 transform hover:scale-110 active:scale-95"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center bg-gradient-to-br from-coffee-500 to-purple-600 text-white rounded-xl shadow-md hover:shadow-lg disabled:linear disabled:from-gray-300 disabled:to-gray-400 disabled:shadow-none transition-all duration-200 transform hover:scale-105 active:scale-95"
                 title="Send Message"
               >
-                <PaperAirplaneIcon className="w-6 h-6 sm:w-7 sm:h-7 -rotate-12" />
+                <PaperAirplaneIcon className="w-5 h-5 sm:w-6 sm:h-6 -rotate-12" />
               </button>
             </div>
           </form>
 
-          {/* Footer with other controls */}
           <div className="flex items-center justify-between mt-3 sm:mt-4 gap-2">
-            {(
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => {
                   setChatStarted(true);
@@ -1172,14 +1171,21 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
               >
                 Start/Send
               </button>
-            )}
-            <button
-              onClick={onEndChat}
-              className="px-3 sm:px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 font-medium text-xs sm:text-sm flex items-center"
-            >
-              <XMarkIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-              End Chat
-            </button>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-4">
+              <div className="flex items-center text-xs font-semibold text-gray-600 bg-white/50 px-2 py-1 rounded-lg border border-white/20">
+                <ClockIcon className="w-3 h-3 mr-1 text-coffee-500" />
+                <span>{timerStarted ? `${Math.floor(countdown / 60)}:${('0' + (countdown % 60)).slice(-2)}` : '10:00'}</span>
+              </div>
+              <button
+                onClick={onEndChat}
+                className="px-3 sm:px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 font-medium text-xs sm:text-sm flex items-center"
+              >
+                <XMarkIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                End Chat
+              </button>
+            </div>
           </div>
         </>
       )}
