@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { ChatMessage } from '@/types';
-import { ClockIcon, XMarkIcon, CreditCardIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, XMarkIcon, CreditCardIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient'; // Added for Supabase integration
+//import { supabase } from '@/lib/supabaseClient'; // Added for Supabase integration
 import Script from 'next/script';
 import { initializePayPalButton } from '@/lib/paypalClient';
 import { initializeRazorpayCheckout } from '@/lib/razorpayClient';
@@ -149,7 +149,7 @@ interface ChatProps {
 
 // Payment feature flags (booleans for clarity)
 // Set to true to bypass payment flow, false to show payment options
-const skipPayment: boolean = false; // true => skip payment and go directly to chat
+const skipPayment: boolean = true; // true => skip payment and go directly to chat
 
 // Set to true to disable Razorpay, false to enable it
 const disableRazorpay: boolean = false; // true => Razorpay disabled
@@ -1140,14 +1140,24 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
 
           {/* Chat input form */}
           <form onSubmit={handleSubmit} className="flex items-center gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
-              placeholder={!chatStarted ? 'Click Start/Send to begin...' : (isTyping ? 'AIstroGPT is thinking...' : 'Type your message...')}
-              className="flex-1 p-2.5 sm:p-3 bg-white border border-gray-300 rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 text-sm sm:text-base"
-              disabled={isTyping || !chatStarted}
-            />
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={input}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
+                placeholder={!chatStarted ? 'Click Start/Send to begin...' : (isTyping ? 'AIstroGPT is thinking...' : 'Type your message...')}
+                className="w-full p-2.5 pr-12 sm:p-3 sm:pr-14 bg-white border border-gray-300 rounded-xl placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-coffee-500 focus:border-coffee-500 transition-all duration-200 text-sm sm:text-base"
+                disabled={isTyping || !chatStarted}
+              />
+              <button
+                type="submit"
+                disabled={isTyping || !chatStarted || !input.trim()}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-coffee-600 hover:text-coffee-700 disabled:text-gray-300 transition-colors"
+                title="Send Message"
+              >
+                <PaperAirplaneIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            </div>
           </form>
 
           {/* Footer with other controls */}
@@ -1160,8 +1170,8 @@ export default function Chat({ onEndChat, onReturnToDetails, userDetails, disabl
                   }
                   handleTestAstroApi();
                 }}
-                className="px-3 sm:px-4 py-2 bg-gradient-to-r from-coffee-500 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 font-medium text-xs sm:text-sm"
-                disabled={isTyping}
+                className="px-3 sm:px-4 py-2 bg-gradient-to-r from-coffee-500 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 font-medium text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                disabled={isTyping || chatStarted}
               >
                 Start/Send
               </button>
