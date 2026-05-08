@@ -150,13 +150,13 @@ interface ChatProps {
 
 // Payment feature flags (booleans for clarity)
 // Set to true to bypass payment flow, false to show payment options
-const skipPayment: boolean = false; // true => skip payment and go directly to chat
+const skipPayment: boolean = true; // true => skip payment and go directly to chat
 
 // Set to true to disable Razorpay, false to enable it
-const disableRazorpay: boolean = false; // true => Razorpay disabled
+const disableRazorpay: boolean = true; // true => Razorpay disabled
 
 // Set to true to disable PayPal, false to enable it
-const disablePaypal: boolean = false; // true => PayPal disabled
+const disablePaypal: boolean = true; // true => PayPal disabled
 
 // Timezone behavior toggle
 // If true: derive timezone number (-12..14) from selected city's IANA timezone on the DOB (DST-aware)
